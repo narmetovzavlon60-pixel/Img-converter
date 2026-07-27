@@ -425,6 +425,17 @@
     box-shadow: none;
   }
 
+  .btn-generate.mode-download {
+    background: linear-gradient(135deg, var(--success), #059669);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    animation: pulseDownload 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pulseDownload {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.015); }
+  }
+
   .btn-generate .spinner {
     width: 18px;
     height: 18px;
@@ -782,6 +793,7 @@
       ui_photosTitle: "🖼️ Фотографии",
       ui_emptyState: "Пока нет загруженных фото",
       ui_generateBtn: "⚡ Сформировать PDF",
+      ui_downloadBtn: "📥 Скачать PDF",
       ui_clearBtn: "🗑️ Очистить всё",
       ui_paywallTitle: "Бесплатный лимит исчерпан",
       ui_paywallDesc: "Вы достигли лимита в 15 фотографий. Для снятия ограничений активируйте премиум.",
@@ -810,6 +822,7 @@
       msg_saving: "Сохранение...",
       msg_downloading: "Файл загружается",
       msg_downloadFallback: "Сгенерировано! Нажмите 'ОК', чтобы открыть документ.",
+      msg_pdfReady: "PDF готов! Нажмите «Скачать PDF» ниже 👇",
       placeholder_key: "Введите ключ активации"
     },
     uz: {
@@ -824,6 +837,7 @@
       ui_photosTitle: "🖼️ Rasmlar",
       ui_emptyState: "Hozircha yuklangan rasmlar yo'q",
       ui_generateBtn: "⚡ PDF yaratish",
+      ui_downloadBtn: "📥 PDF-ni yuklab olish",
       ui_clearBtn: "🗑️ Barchasini tozalash",
       ui_paywallTitle: "Bepul limit tugadi",
       ui_paywallDesc: "Siz 15 ta rasm limitiga yetdingiz. Cheklovlarni olib tashlash uchun premiumni faollashtiring.",
@@ -852,6 +866,7 @@
       msg_saving: "Saqlanmoqda...",
       msg_downloading: "Fayl yuklanmoqda",
       msg_downloadFallback: "Yaratildi! Hujjatni ochish uchun 'OK' tugmasini bosing.",
+      msg_pdfReady: "PDF tayyor! Pastdagi «PDF-ni yuklab olish» tugmasini bosing 👇",
       placeholder_key: "Premium kalitni kiriting"
     }
   };
@@ -881,7 +896,9 @@
       if (el) el.textContent = t(id.replace('-', '_'));
     });
 
-    document.getElementById('generateBtnContent').innerHTML = t('ui_generateBtn');
+    const genBtnEl = document.getElementById('generateBtn');
+    document.getElementById('generateBtnContent').innerHTML =
+      (genBtnEl && genBtnEl.dataset.mode === 'download') ? t('ui_downloadBtn') : t('ui_generateBtn');
     document.getElementById('clearBtn').innerHTML = t('ui_clearBtn');
     document.getElementById('copyCardBtn').textContent = t('ui_copyBtn');
     document.getElementById('activateBtn').textContent = t('ui_activateBtn');
@@ -1072,7 +1089,22 @@
   const generateBtnContent = document.getElementById('generateBtnContent');
   const clearBtn = document.getElementById('clearBtn');
   
+  // Хранилище готового PDF между "Сформировать" и "Скачать"
+  let generatedPdfBlob = null;
+  let generatedFileName = '';
+
+  function resetGenerateButton() {
+    generatedPdfBlob = null;
+    generatedFileName = '';
+    generateBtn.dataset.mode = 'generate';
+    generateBtn.classList.remove('mode-download');
+    generateBtnContent.innerHTML = t('ui_generateBtn');
+  }
+
   function renderGrid() {
+    // Любое изменение списка фото делает предыдущий PDF неактуальным
+    resetGenerateButton();
+
     const count = state.images.length;
     document.getElementById('countBadge').textContent = count;
 
@@ -1210,23 +1242,106 @@
     progressOverlay.classList.remove('active');
   }
 
-  // Вспомогательная функция для безопасного скачивания
-  function downloadFallback(pdf, fileName) {
-    const pdfBlob = pdf.output('blob');
-    const blobUrl = URL.createObjectURL(pdfBlob);
+  /**
+   * НАДЕЖНОЕ СКАЧИВАНИЕ ДЛЯ TELEGRAM WEBVIEW
+   * Вызывается ТОЛЬКО из прямого, физического клика пользователя по кнопке
+   * "Скачать PDF" (уже готовый blob, без await-разрывов user-activation).
+   * Порядок попыток:
+   *   1) navigator.share() с файлом — открывает нативный шаринг ОС
+   *      (лучший вариант на Android/iOS внутри Telegram WebView).
+   *   2) Явный <a download> клик по blob-ссылке (безопасно, т.к. это
+   *      прямой клик, а не программный клик после асинхронной генерации).
+   *   3) tg.openLink(blobUrl) — запасной вариант для строгих WebView.
+   *   4) Открытие data URI в новой вкладке — последний рубеж.
+   */
+  async function handleDownloadClick() {
+    if (!generatedPdfBlob) {
+      showToast(t('msg_needImages'), 'error');
+      return;
+    }
+    haptic('medium');
+    const fileName = generatedFileName || `Scans_Document_${Date.now()}.pdf`;
 
-    const win = window.open(blobUrl, '_blank');
-    if (!win) {
+    // 1) Нативный Share Sheet (наиболее стабильный способ в Telegram WebView)
+    try {
+      if (navigator.share && navigator.canShare) {
+        const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: fileName });
+          haptic('success');
+          showToast(t('msg_pdfSuccess'), 'success');
+          return;
+        }
+      }
+    } catch (shareErr) {
+      // Пользователь отменил системный диалог шаринга — это не ошибка
+      if (shareErr && shareErr.name === 'AbortError') return;
+      console.warn('navigator.share недоступен или упал, пробуем fallback:', shareErr);
+    }
+
+    // 2) Прямой клик по <a download="..."> — безопасно, т.к. вызывается
+    //    синхронно внутри реального клика пользователя
+    try {
+      const blobUrl = URL.createObjectURL(generatedPdfBlob);
       const a = document.createElement('a');
       a.href = blobUrl;
       a.download = fileName;
-      a.target = '_blank';
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+      haptic('success');
+      showToast(t('msg_pdfSuccess'), 'success');
+      return;
+    } catch (linkErr) {
+      console.warn('Прямое скачивание через <a> не удалось:', linkErr);
     }
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+    // 3) tg.openLink — открывает blob через системный браузер Telegram
+    try {
+      if (tg && tg.openLink) {
+        const blobUrl = URL.createObjectURL(generatedPdfBlob);
+        tg.openLink(blobUrl, { try_instant_view: false });
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        showToast(t('msg_downloadFallback'), 'success');
+        return;
+      }
+    } catch (tgErr) {
+      console.warn('tg.openLink не сработал:', tgErr);
+    }
+
+    // 4) Последний рубеж — data URI в новом окне/вкладке
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const opened = window.open(reader.result, '_blank');
+        if (!opened) {
+          showToast(t('msg_pdfError'), 'error');
+        } else {
+          showToast(t('msg_downloadFallback'), 'success');
+        }
+      };
+      reader.onerror = () => {
+        haptic('error');
+        showToast(t('msg_pdfError'), 'error');
+      };
+      reader.readAsDataURL(generatedPdfBlob);
+    } catch (finalErr) {
+      console.error('Все способы скачивания не удались:', finalErr);
+      haptic('error');
+      showToast(t('msg_pdfError') + ': ' + finalErr.message, 'error');
+    }
   }
 
   generateBtn.addEventListener('click', async () => {
+    // Если кнопка сейчас в режиме "Скачать PDF" — это прямой клик пользователя,
+    // выполняем реальное скачивание уже готового файла без новой генерации.
+    if (generateBtn.dataset.mode === 'download') {
+      handleDownloadClick();
+      return;
+    }
+
     if (state.images.length === 0) return;
     haptic('medium');
 
@@ -1293,36 +1408,29 @@
 
       const fileName = `Scans_Document_${Date.now()}.pdf`;
 
-      // НАДЕЖНАЯ ЛОГИКА СКАЧИВАНИЯ ДЛЯ TELEGRAM WEBVIEW
-      const pdfDataUri = pdf.output('datauristring');
-      
-      if (tg && tg.openLink) {
-        try {
-          if (pdfDataUri.length < 2000000) {
-            tg.openLink(pdfDataUri);
-          } else {
-            const pdfBlob = pdf.output('blob');
-            const blobUrl = URL.createObjectURL(pdfBlob);
-            tg.openLink(blobUrl);
-          }
-        } catch (e) {
-          console.warn('tg.openLink failed, switching to standard fallback:', e);
-          downloadFallback(pdf, fileName);
-        }
-      } else {
-        downloadFallback(pdf, fileName);
-      }
+      // Собранный документ сохраняем как Blob и НЕ пытаемся скачать его
+      // автоматически — WebView Telegram блокирует программные клики/
+      // скрытые ссылки без прямого физического взаимодействия пользователя.
+      generatedPdfBlob = pdf.output('blob');
+      generatedFileName = fileName;
 
       hideProgress();
       haptic('success');
-      showToast(t('msg_pdfSuccess'), 'success');
+
+      // Превращаем кнопку в явную интерактивную "Скачать PDF"
+      generateBtn.dataset.mode = 'download';
+      generateBtn.classList.add('mode-download');
+      generateBtn.disabled = false;
+      generateBtnContent.innerHTML = t('ui_downloadBtn');
+      showToast(t('msg_pdfReady'), 'success');
 
     } catch (err) {
       console.error('PDF generation error:', err);
       haptic('error');
       hideProgress();
       showToast(t('msg_pdfError') + ': ' + err.message, 'error');
-    } finally {
+      generateBtn.dataset.mode = 'generate';
+      generateBtn.classList.remove('mode-download');
       generateBtn.disabled = state.images.length === 0;
       generateBtnContent.innerHTML = t('ui_generateBtn');
     }
