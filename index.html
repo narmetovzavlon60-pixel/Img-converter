@@ -42,7 +42,6 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
-    /* Safe area fixes for Telegram Mini Apps */
     min-height: var(--tg-viewport-height, 100vh);
     background-image: 
       radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
@@ -728,14 +727,14 @@
     <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; text-align: left;" id="ui-cardNumberLabel">Номер карты для оплаты:</div>
     <div class="paywall-card-details">
       <span>9860 1866 1494 6207</span>
-      <button class="btn-copy" id="copyCardBtn" id="ui-copyBtn">Копировать</button>
+      <button class="btn-copy" id="copyCardBtn">Копировать</button>
     </div>
     
     <a href="https://t.me/INFINITY_CYCLE" class="paywall-link" target="_blank" id="ui-contactLink">@INFINITY_CYCLE</a>
     
     <input type="text" class="secret-input" id="secretInput" placeholder="Введите ключ активации">
-    <button class="btn-activate" id="activateBtn" id="ui-activateBtn">Активировать</button>
-    <button class="btn-close" id="closePaywallBtn" id="ui-closeBtn">Закрыть</button>
+    <button class="btn-activate" id="activateBtn">Активировать</button>
+    <button class="btn-close" id="closePaywallBtn">Закрыть</button>
   </div>
 </div>
 
@@ -866,12 +865,10 @@
   }
 
   function applyLanguage() {
-    // Update active button
     document.querySelectorAll('.lang-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.lang === state.lang);
     });
 
-    // Update DOM UI elements
     const elementsToUpdate = [
       'ui-title', 'ui-subtitle', 'ui-dropzoneTitle', 'ui-dropzoneSub',
       'ui-settingsTitle', 'ui-optAuto', 'ui-optPortrait', 'ui-optLandscape',
@@ -893,7 +890,6 @@
     document.getElementById('secretInput').placeholder = t('placeholder_key');
   }
 
-  // Auto-detect lang on first load if not set manually
   if (!localStorage.getItem('appLang')) {
     const tgUserLang = tg?.initDataUnsafe?.user?.language_code;
     state.lang = (tgUserLang === 'uz') ? 'uz' : 'ru';
@@ -901,7 +897,6 @@
   }
   applyLanguage();
 
-  // Lang switcher logic
   document.getElementById('langSwitch').addEventListener('click', (e) => {
     if (e.target.classList.contains('lang-btn')) {
       haptic('light');
@@ -911,8 +906,6 @@
     }
   });
 
-
-  // Toast notification
   let toastTimeout;
   function showToast(message, type = '') {
     const toastEl = document.getElementById('toast');
@@ -924,7 +917,6 @@
     }, 3000);
   }
 
-  // Paywall Logic
   const paywallOverlay = document.getElementById('paywallOverlay');
   const secretInput = document.getElementById('secretInput');
 
@@ -964,8 +956,6 @@
     }
   });
 
-
-  // File reading with Canvas compression
   function readFileAsDataURL(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1018,8 +1008,6 @@
     });
   }
 
-
-  // Process files
   async function processFiles(files) {
     if (!files || files.length === 0) return;
 
@@ -1031,7 +1019,6 @@
       return;
     }
 
-    // Paywall Limit Check
     if (!state.isUnlocked) {
       const availableSlots = MAX_FREE_PHOTOS - state.images.length;
       if (fileArray.length > availableSlots) {
@@ -1079,8 +1066,6 @@
     }
   }
 
-
-  // UI Elements
   const imageGrid = document.getElementById('imageGrid');
   const emptyState = document.getElementById('emptyState');
   const generateBtn = document.getElementById('generateBtn');
@@ -1124,8 +1109,6 @@
     });
   }
 
-
-  // Delegated Events for Grid
   imageGrid.addEventListener('click', (e) => {
     const btn = e.target.closest('.card-btn');
     if (!btn) return;
@@ -1153,8 +1136,6 @@
     }
   });
 
-
-  // Orientation Toggle
   document.getElementById('orientationToggle').addEventListener('click', (e) => {
     const btn = e.target.closest('.orientation-btn');
     if (!btn) return;
@@ -1164,8 +1145,6 @@
     state.orientation = btn.dataset.orientation;
   });
 
-
-  // Dropzone & Inputs
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
 
@@ -1195,8 +1174,6 @@
     }
   });
 
-
-  // Clear Button
   clearBtn.addEventListener('click', () => {
     if (state.images.length === 0) return;
     haptic('medium');
@@ -1207,8 +1184,6 @@
     }
   });
 
-
-  // Progress UI
   const progressOverlay = document.getElementById('progressOverlay');
   const progressTitle = document.getElementById('progressTitle');
   const progressText = document.getElementById('progressText');
@@ -1235,8 +1210,22 @@
     progressOverlay.classList.remove('active');
   }
 
+  // Вспомогательная функция для безопасного скачивания
+  function downloadFallback(pdf, fileName) {
+    const pdfBlob = pdf.output('blob');
+    const blobUrl = URL.createObjectURL(pdfBlob);
 
-  // PDF Generation & Download
+    const win = window.open(blobUrl, '_blank');
+    if (!win) {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.target = '_blank';
+      a.click();
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  }
+
   generateBtn.addEventListener('click', async () => {
     if (state.images.length === 0) return;
     haptic('medium');
@@ -1262,8 +1251,7 @@
         progressPercent.textContent = Math.round(percent) + '%';
         progressOverlay.classList.add('active');
 
-        // Microtask yield
-        await new Promise(r => setTimeout(r, 0));
+        await new Promise(r => setTimeout(r, 10));
 
         let orientation = 'p';
         if (state.orientation === 'portrait') orientation = 'p';
@@ -1304,30 +1292,29 @@
       progressPercent.textContent = '100%';
 
       const fileName = `Scans_Document_${Date.now()}.pdf`;
-      const pdfBlob = pdf.output('blob');
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      
-      // Fallback Logic for Telegram WebView (iOS/Android constraints)
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
 
-      try {
-        a.click();
-        haptic('success');
-      } catch (e) {
-        // Safe fallback if simulated click is blocked
-        if (confirm(t('msg_downloadFallback'))) {
-          window.open(blobUrl, '_blank');
+      // НАДЕЖНАЯ ЛОГИКА СКАЧИВАНИЯ ДЛЯ TELEGRAM WEBVIEW
+      const pdfDataUri = pdf.output('datauristring');
+      
+      if (tg && tg.openLink) {
+        try {
+          if (pdfDataUri.length < 2000000) {
+            tg.openLink(pdfDataUri);
+          } else {
+            const pdfBlob = pdf.output('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            tg.openLink(blobUrl);
+          }
+        } catch (e) {
+          console.warn('tg.openLink failed, switching to standard fallback:', e);
+          downloadFallback(pdf, fileName);
         }
+      } else {
+        downloadFallback(pdf, fileName);
       }
 
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
-
       hideProgress();
+      haptic('success');
       showToast(t('msg_pdfSuccess'), 'success');
 
     } catch (err) {
@@ -1341,7 +1328,6 @@
     }
   });
 
-  // Init
   renderGrid();
 
 })();
