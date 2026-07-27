@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f172a">
+<title>Image to PDF Converter</title>
+<!-- Telegram WebApp SDK -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- jsPDF Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :root {
+    --bg-primary: var(--tg-theme-bg-color, #0f172a);
+    --bg-secondary: var(--tg-theme-secondary-bg-color, #1e293b);
+    --bg-tertiary: #334155;
+    --bg-card: var(--tg-theme-bg-color, #1e293b);
+    --accent: var(--tg-theme-button-color, #6366f1);
+    --accent-hover: #4f46e5;
+    --accent-glow: rgba(99, 102, 241, 0.4);
+    --success: #10b981;
+    --danger: var(--tg-theme-destructive-text-color, #ef4444);
+    --text-primary: var(--tg-theme-text-color, #f1f5f9);
+    --text-secondary: var(--tg-theme-hint-color, #94a3b8);
+    --border: #334155;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  html, body {
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    /* Safe area fixes for Telegram Mini Apps */
+    min-height: var(--tg-viewport-height, 100vh);
+    background-image: 
+      radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 100%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+    background-attachment: fixed;
+    padding-bottom: max(180px, env(safe-area-inset-bottom));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    position: relative;
+  }
+
+  /* Header & Lang Switch */
+  .top-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+  }
+
+  .lang-switch {
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    display: flex;
+    padding: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .lang-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+
+  .lang-btn.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #a78bfa, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+  }
+
+  .header p {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  /* Dropzone */
+  .dropzone {
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border);
+    border-radius: 20px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    display: block;
+  }
+
+  .dropzone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px var(--accent-glow);
+  }
+
+  .dropzone:active {
+    transform: scale(0.98);
+  }
+
+  .dropzone-icon {
+    font-size: 56px;
+    margin-bottom: 12px;
+    display: block;
+    filter: drop-shadow(0 4px 12px var(--accent-glow));
+  }
+
+  .dropzone-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .dropzone-subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .dropzone input[type="file"] {
+    display: none;
+  }
+
+  /* Settings */
+  .settings {
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    padding: 18px;
+    margin-top: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .settings-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .orientation-toggle {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    background: var(--bg-primary);
+    padding: 4px;
+    border-radius: 12px;
+  }
+
+  .orientation-btn {
+    padding: 10px 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .orientation-btn .icon {
+    font-size: 18px;
+  }
+
+  .orientation-btn.active {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+
+  /* Grid */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 28px 0 14px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    background: var(--accent);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    animation: cardIn 0.3s ease;
+  }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .card.removing {
+    animation: cardOut 0.3s ease forwards;
+  }
+
+  @keyframes cardOut {
+    to { opacity: 0; transform: scale(0.8); }
+  }
+
+  .card-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--bg-primary);
+    overflow: hidden;
+  }
+
+  .card-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .card-number {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    padding: 10px 0;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .card-btn:last-child {
+    border-right: none;
+  }
+
+  .card-btn:active {
+    background: var(--bg-tertiary);
+  }
+
+  .card-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .card-btn.btn-delete:active {
+    background: var(--danger);
+    color: white;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    border: 1px dashed var(--border);
+  }
+
+  .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  /* FAB Container */
+  .fab-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, var(--bg-primary) 70%, transparent);
+    padding: 20px 16px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    z-index: 50;
+  }
+
+  .fab-container::before {
+    content: '';
+    position: absolute;
+    top: -40px;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(to top, var(--bg-primary), transparent);
+    pointer-events: none;
+  }
+
+  .fab-wrapper {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .btn-generate {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    color: white;
+    border: none;
+    padding: 18px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 8px 25px var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-generate:active:not(:disabled) {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: 0 4px 15px var(--accent-glow);
+  }
+
+  .btn-generate:disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .btn-generate .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-clear {
+    width: 100%;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-clear:active:not(:disabled) {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  /* Modals & Overlays */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+
+  .overlay.active {
+    display: flex;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .overlay-card {
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    padding: 28px 24px;
+    max-width: 340px;
+    width: 100%;
+    text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transform: scale(0.95);
+    animation: scaleIn 0.2s ease-out forwards;
+  }
+
+  @keyframes scaleIn {
+    to { transform: scale(1); }
+  }
+
+  .overlay-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  .overlay-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 20px;
+    line-height: 1.4;
+  }
+
+  /* Progress Bar */
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #8b5cf6);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .progress-percent {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  /* Paywall Specific */
+  .paywall-card-details {
+    background: var(--bg-primary);
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px dashed var(--border);
+  }
+
+  .btn-copy {
+    background: var(--bg-tertiary);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  
+  .btn-copy:active { background: var(--accent); }
+
+  .paywall-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 20px;
+  }
+
+  .secret-input {
+    width: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    margin-bottom: 12px;
+    text-align: center;
+    outline: none;
+  }
+  
+  .secret-input:focus { border-color: var(--accent); }
+
+  .btn-activate {
+    width: 100%;
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+
+  .btn-close {
+    width: 100%;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    padding: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: max(20px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    max-width: 90%;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header & i18n -->
+  <div class="top-bar">
+    <div class="lang-switch" id="langSwitch">
+      <button class="lang-btn active" data-lang="ru">RU</button>
+      <button class="lang-btn" data-lang="uz">UZ</button>
+    </div>
+  </div>
+
+  <div class="header">
+    <h1 id="ui-title">📄 Image to PDF</h1>
+    <p id="ui-subtitle">Склейка фото в PDF документ</p>
+  </div>
+
+  <!-- Dropzone -->
+  <label for="fileInput" class="dropzone" id="dropzone">
+    <span class="dropzone-icon">📸</span>
+    <div class="dropzone-title" id="ui-dropzoneTitle">Выберите фотографии</div>
+    <div class="dropzone-subtitle" id="ui-dropzoneSub">Нажмите или перетащите файлы сюда</div>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </label>
+
+  <!-- Settings -->
+  <div class="settings">
+    <div class="settings-label" id="ui-settingsTitle">⚙️ Ориентация страниц</div>
+    <div class="orientation-toggle" id="orientationToggle">
+      <button class="orientation-btn active" data-orientation="auto">
+        <span class="icon">✨</span>
+        <span id="ui-optAuto">Авто</span>
+      </button>
+      <button class="orientation-btn" data-orientation="portrait">
+        <span class="icon">📱</span>
+        <span id="ui-optPortrait">Портрет</span>
+      </button>
+      <button class="orientation-btn" data-orientation="landscape">
+        <span class="icon">🖥️</span>
+        <span id="ui-optLandscape">Альбом</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Images Grid -->
+  <div class="section-header">
+    <div class="section-title">
+      <span id="ui-photosTitle">🖼️ Фотографии</span>
+      <span class="badge" id="countBadge">0</span>
+    </div>
+  </div>
+
+  <div id="gridContainer">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-icon">📭</div>
+      <div id="ui-emptyState">Пока нет загруженных фото</div>
+    </div>
+    <div class="grid" id="imageGrid" style="display: none;"></div>
+  </div>
+</div>
+
+<!-- Floating Buttons -->
+<div class="fab-container">
+  <div class="fab-wrapper">
+    <button class="btn-generate" id="generateBtn" disabled>
+      <span id="generateBtnContent">⚡ Сформировать PDF</span>
+    </button>
+    <button class="btn-clear" id="clearBtn" disabled>🗑️ Очистить всё</button>
+  </div>
+</div>
+
+<!-- Progress Overlay -->
+<div class="overlay" id="progressOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title" id="progressTitle">Генерация PDF...</div>
+    <div class="overlay-text" id="progressText">Подготовка изображений</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-percent" id="progressPercent">0%</div>
+  </div>
+</div>
+
+<!-- Paywall Overlay -->
+<div class="overlay" id="paywallOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title" id="ui-paywallTitle">Лимит исчерпан</div>
+    <div class="overlay-text" id="ui-paywallDesc">Вы достигли лимита в 15 фото. Активируйте премиум.</div>
+    
+    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; text-align: left;" id="ui-cardNumberLabel">Номер карты для оплаты:</div>
+    <div class="paywall-card-details">
+      <span>9860 1866 1494 6207</span>
+      <button class="btn-copy" id="copyCardBtn" id="ui-copyBtn">Копировать</button>
+    </div>
+    
+    <a href="https://t.me/INFINITY_CYCLE" class="paywall-link" target="_blank" id="ui-contactLink">@INFINITY_CYCLE</a>
+    
+    <input type="text" class="secret-input" id="secretInput" placeholder="Введите ключ активации">
+    <button class="btn-activate" id="activateBtn" id="ui-activateBtn">Активировать</button>
+    <button class="btn-close" id="closePaywallBtn" id="ui-closeBtn">Закрыть</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // Telegram WebApp Initialization
+  const tg = window.Telegram ? window.Telegram.WebApp : null;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  function haptic(style = 'light') {
+    if (tg && tg.HapticFeedback) {
+      tg.HapticFeedback.impactOccurred(style);
+    }
+  }
+
+  // State
+  const MAX_FREE_PHOTOS = 15;
+  const MASTER_KEY = 'INFINITY2026';
+  
+  const state = {
+    images: [],
+    orientation: 'auto',
+    isUnlocked: localStorage.getItem('premiumUnlocked') === 'true',
+    lang: localStorage.getItem('appLang') || 'ru'
+  };
+
+  // i18n Dictionary
+  const i18n = {
+    ru: {
+      ui_title: "📄 Image to PDF",
+      ui_subtitle: "Склейка фото в PDF документ",
+      ui_dropzoneTitle: "Выберите фотографии",
+      ui_dropzoneSub: "Нажмите или перетащите файлы сюда",
+      ui_settingsTitle: "⚙️ Ориентация страниц",
+      ui_optAuto: "Авто",
+      ui_optPortrait: "Портрет",
+      ui_optLandscape: "Альбом",
+      ui_photosTitle: "🖼️ Фотографии",
+      ui_emptyState: "Пока нет загруженных фото",
+      ui_generateBtn: "⚡ Сформировать PDF",
+      ui_clearBtn: "🗑️ Очистить всё",
+      ui_paywallTitle: "Бесплатный лимит исчерпан",
+      ui_paywallDesc: "Вы достигли лимита в 15 фотографий. Для снятия ограничений активируйте премиум.",
+      ui_cardNumberLabel: "Номер карты для оплаты:",
+      ui_copyBtn: "Копировать",
+      ui_contactLink: "Связаться с владельцем (@INFINITY_CYCLE)",
+      ui_activateBtn: "Активировать",
+      ui_closeBtn: "Закрыть",
+      
+      msg_generating: "Генерация PDF...",
+      msg_preparing: "Подготовка изображений",
+      msg_reading: "Загрузка файлов...",
+      msg_processing: "Чтение и сжатие",
+      msg_processedN: "Обработано {c} из {t}",
+      msg_addMore: "Добавлено {n} фото",
+      msg_needImages: "Выберите изображения",
+      msg_limitReached: "Лимит: максимум 15 фото",
+      msg_copied: "Номер карты скопирован!",
+      msg_invalidKey: "Неверный ключ активации!",
+      msg_unlocked: "Премиум активирован! ✨",
+      msg_pdfSuccess: "PDF успешно создан! ✓",
+      msg_pdfError: "Ошибка при создании PDF",
+      msg_deleteConfirm: "Удалить все загруженные фото?",
+      msg_listCleared: "Список очищен",
+      msg_addingPage: "Добавление страницы {c} из {t}",
+      msg_saving: "Сохранение...",
+      msg_downloading: "Файл загружается",
+      msg_downloadFallback: "Сгенерировано! Нажмите 'ОК', чтобы открыть документ.",
+      placeholder_key: "Введите ключ активации"
+    },
+    uz: {
+      ui_title: "📄 Image to PDF",
+      ui_subtitle: "Rasmlarni PDF hujjatiga birlashtirish",
+      ui_dropzoneTitle: "Rasmlarni tanlang",
+      ui_dropzoneSub: "Bu yerga bosing yoki fayllarni torting",
+      ui_settingsTitle: "⚙️ Sahifa yo'nalishi",
+      ui_optAuto: "Avto",
+      ui_optPortrait: "Portret",
+      ui_optLandscape: "Albom",
+      ui_photosTitle: "🖼️ Rasmlar",
+      ui_emptyState: "Hozircha yuklangan rasmlar yo'q",
+      ui_generateBtn: "⚡ PDF yaratish",
+      ui_clearBtn: "🗑️ Barchasini tozalash",
+      ui_paywallTitle: "Bepul limit tugadi",
+      ui_paywallDesc: "Siz 15 ta rasm limitiga yetdingiz. Cheklovlarni olib tashlash uchun premiumni faollashtiring.",
+      ui_cardNumberLabel: "To'lov uchun karta raqami:",
+      ui_copyBtn: "Nusxa olish",
+      ui_contactLink: "Egasi bilan bog'lanish (@INFINITY_CYCLE)",
+      ui_activateBtn: "Faollashtirish",
+      ui_closeBtn: "Yopish",
+      
+      msg_generating: "PDF yaratilmoqda...",
+      msg_preparing: "Rasmlar tayyorlanmoqda",
+      msg_reading: "Fayllar yuklanmoqda...",
+      msg_processing: "O'qish va siqish",
+      msg_processedN: "{t} tadan {c} tasi ishlandi",
+      msg_addMore: "{n} ta rasm qo'shildi",
+      msg_needImages: "Rasmlarni tanlang",
+      msg_limitReached: "Limit: maksimal 15 ta rasm",
+      msg_copied: "Karta raqami nusxalandi!",
+      msg_invalidKey: "Noto'g'ri kalit!",
+      msg_unlocked: "Premium faollashtirildi! ✨",
+      msg_pdfSuccess: "PDF muvaffaqiyatli yaratildi! ✓",
+      msg_pdfError: "PDF yaratishda xatolik",
+      msg_deleteConfirm: "Barcha rasmlarni o'chirasizmi?",
+      msg_listCleared: "Ro'yxat tozalandi",
+      msg_addingPage: "{t} tadan {c}-sahifa qo'shilmoqda",
+      msg_saving: "Saqlanmoqda...",
+      msg_downloading: "Fayl yuklanmoqda",
+      msg_downloadFallback: "Yaratildi! Hujjatni ochish uchun 'OK' tugmasini bosing.",
+      placeholder_key: "Premium kalitni kiriting"
+    }
+  };
+
+  function t(key, params = {}) {
+    let str = i18n[state.lang][key] || key;
+    for (const [k, v] of Object.entries(params)) {
+      str = str.replace(`{${k}}`, v);
+    }
+    return str;
+  }
+
+  function applyLanguage() {
+    // Update active button
+    document.querySelectorAll('.lang-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.lang === state.lang);
+    });
+
+    // Update DOM UI elements
+    const elementsToUpdate = [
+      'ui-title', 'ui-subtitle', 'ui-dropzoneTitle', 'ui-dropzoneSub',
+      'ui-settingsTitle', 'ui-optAuto', 'ui-optPortrait', 'ui-optLandscape',
+      'ui-photosTitle', 'ui-emptyState', 'ui-paywallTitle', 'ui-paywallDesc',
+      'ui-cardNumberLabel'
+    ];
+
+    elementsToUpdate.forEach(id => {
+      const el = document.getElementById(id.replace('-', ''));
+      if (el) el.textContent = t(id.replace('-', '_'));
+    });
+
+    document.getElementById('generateBtnContent').innerHTML = t('ui_generateBtn');
+    document.getElementById('clearBtn').innerHTML = t('ui_clearBtn');
+    document.getElementById('copyCardBtn').textContent = t('ui_copyBtn');
+    document.getElementById('activateBtn').textContent = t('ui_activateBtn');
+    document.getElementById('closePaywallBtn').textContent = t('ui_closeBtn');
+    document.querySelector('.paywall-link').textContent = t('ui_contactLink');
+    document.getElementById('secretInput').placeholder = t('placeholder_key');
+  }
+
+  // Auto-detect lang on first load if not set manually
+  if (!localStorage.getItem('appLang')) {
+    const tgUserLang = tg?.initDataUnsafe?.user?.language_code;
+    state.lang = (tgUserLang === 'uz') ? 'uz' : 'ru';
+    localStorage.setItem('appLang', state.lang);
+  }
+  applyLanguage();
+
+  // Lang switcher logic
+  document.getElementById('langSwitch').addEventListener('click', (e) => {
+    if (e.target.classList.contains('lang-btn')) {
+      haptic('light');
+      state.lang = e.target.dataset.lang;
+      localStorage.setItem('appLang', state.lang);
+      applyLanguage();
+    }
+  });
+
+
+  // Toast notification
+  let toastTimeout;
+  function showToast(message, type = '') {
+    const toastEl = document.getElementById('toast');
+    clearTimeout(toastTimeout);
+    toastEl.textContent = message;
+    toastEl.className = 'toast show ' + type;
+    toastTimeout = setTimeout(() => {
+      toastEl.classList.remove('show');
+    }, 3000);
+  }
+
+  // Paywall Logic
+  const paywallOverlay = document.getElementById('paywallOverlay');
+  const secretInput = document.getElementById('secretInput');
+
+  function showPaywall() {
+    haptic('error');
+    paywallOverlay.classList.add('active');
+  }
+
+  function hidePaywall() {
+    paywallOverlay.classList.remove('active');
+    secretInput.value = '';
+  }
+
+  document.getElementById('closePaywallBtn').addEventListener('click', () => {
+    haptic('light');
+    hidePaywall();
+  });
+
+  document.getElementById('copyCardBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText('9860186614946207').then(() => {
+      haptic('medium');
+      showToast(t('msg_copied'), 'success');
+    });
+  });
+
+  document.getElementById('activateBtn').addEventListener('click', () => {
+    const val = secretInput.value.trim().toUpperCase();
+    if (val === MASTER_KEY || val === 'PREMIUM_UNLOCK') {
+      haptic('success');
+      state.isUnlocked = true;
+      localStorage.setItem('premiumUnlocked', 'true');
+      showToast(t('msg_unlocked'), 'success');
+      hidePaywall();
+    } else {
+      haptic('error');
+      showToast(t('msg_invalidKey'), 'error');
+    }
+  });
+
+
+  // File reading with Canvas compression
+  function readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function compressImage(dataUrl, maxSize = 1600, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        
+        if (width <= maxSize && height <= maxSize && dataUrl.length < 200000) {
+          resolve({ dataUrl, width, height });
+          return;
+        }
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round(height * (maxSize / width));
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round(width * (maxSize / height));
+            height = maxSize;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        try {
+          resolve({ dataUrl: canvas.toDataURL('image/jpeg', quality), width, height });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+
+  // Process files
+  async function processFiles(files) {
+    if (!files || files.length === 0) return;
+
+    let fileArray = Array.from(files).filter(f => f.type.startsWith('image/'));
+    
+    if (fileArray.length === 0) {
+      showToast(t('msg_needImages'), 'error');
+      haptic('error');
+      return;
+    }
+
+    // Paywall Limit Check
+    if (!state.isUnlocked) {
+      const availableSlots = MAX_FREE_PHOTOS - state.images.length;
+      if (fileArray.length > availableSlots) {
+        showPaywall();
+        fileArray = fileArray.slice(0, Math.max(0, availableSlots));
+        if (fileArray.length === 0) return;
+        showToast(t('msg_limitReached'), 'error');
+      }
+    }
+
+    showProgress(t('msg_reading'), t('msg_processing'), 0);
+    haptic('medium');
+
+    const total = fileArray.length;
+    let processed = 0;
+    const newImages = [];
+
+    for (const file of fileArray) {
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        const compressed = await compressImage(dataUrl);
+        newImages.push({
+          id: Date.now() + Math.random(),
+          dataUrl: compressed.dataUrl,
+          name: file.name,
+          width: compressed.width,
+          height: compressed.height
+        });
+        processed++;
+        updateProgress(processed, total, t('msg_reading'));
+      } catch (err) {
+        console.error('File Error:', file.name, err);
+        processed++;
+        updateProgress(processed, total, t('msg_reading'));
+      }
+    }
+
+    state.images.push(...newImages);
+    hideProgress();
+    renderGrid();
+    
+    if (newImages.length > 0) {
+      haptic('success');
+      showToast(t('msg_addMore', { n: newImages.length }), 'success');
+    }
+  }
+
+
+  // UI Elements
+  const imageGrid = document.getElementById('imageGrid');
+  const emptyState = document.getElementById('emptyState');
+  const generateBtn = document.getElementById('generateBtn');
+  const generateBtnContent = document.getElementById('generateBtnContent');
+  const clearBtn = document.getElementById('clearBtn');
+  
+  function renderGrid() {
+    const count = state.images.length;
+    document.getElementById('countBadge').textContent = count;
+
+    if (count === 0) {
+      imageGrid.style.display = 'none';
+      emptyState.style.display = 'block';
+      generateBtn.disabled = true;
+      clearBtn.disabled = true;
+      return;
+    }
+
+    imageGrid.style.display = 'grid';
+    emptyState.style.display = 'none';
+    generateBtn.disabled = false;
+    clearBtn.disabled = false;
+
+    imageGrid.innerHTML = '';
+    state.images.forEach((img, idx) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.id = img.id;
+      card.innerHTML = `
+        <div class="card-preview">
+          <img src="${img.dataUrl}" alt="Page ${idx + 1}" loading="lazy">
+          <div class="card-number">${idx + 1}</div>
+        </div>
+        <div class="card-actions">
+          <button class="card-btn btn-move" data-action="left" ${idx === 0 ? 'disabled' : ''}>⬅️</button>
+          <button class="card-btn btn-delete" data-action="delete">❌</button>
+          <button class="card-btn btn-move" data-action="right" ${idx === count - 1 ? 'disabled' : ''}>➡️</button>
+        </div>
+      `;
+      imageGrid.appendChild(card);
+    });
+  }
+
+
+  // Delegated Events for Grid
+  imageGrid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.card-btn');
+    if (!btn) return;
+    haptic('light');
+
+    const card = btn.closest('.card');
+    const id = card.dataset.id;
+    const idx = state.images.findIndex(img => img.id === id);
+    if (idx === -1) return;
+
+    const action = btn.dataset.action;
+    if (action === 'left' && idx > 0) {
+      [state.images[idx - 1], state.images[idx]] = [state.images[idx], state.images[idx - 1]];
+      renderGrid();
+    } else if (action === 'right' && idx < state.images.length - 1) {
+      [state.images[idx + 1], state.images[idx]] = [state.images[idx], state.images[idx + 1]];
+      renderGrid();
+    } else if (action === 'delete') {
+      haptic('medium');
+      card.classList.add('removing');
+      setTimeout(() => {
+        state.images.splice(idx, 1);
+        renderGrid();
+      }, 250);
+    }
+  });
+
+
+  // Orientation Toggle
+  document.getElementById('orientationToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.orientation-btn');
+    if (!btn) return;
+    haptic('light');
+    document.querySelectorAll('.orientation-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.orientation = btn.dataset.orientation;
+  });
+
+
+  // Dropzone & Inputs
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+
+  fileInput.addEventListener('change', (e) => {
+    processFiles(e.target.files);
+    e.target.value = ''; 
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('drag-over');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('drag-over');
+    });
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    haptic('medium');
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
+    }
+  });
+
+
+  // Clear Button
+  clearBtn.addEventListener('click', () => {
+    if (state.images.length === 0) return;
+    haptic('medium');
+    if (confirm(t('msg_deleteConfirm'))) {
+      state.images = [];
+      renderGrid();
+      showToast(t('msg_listCleared'));
+    }
+  });
+
+
+  // Progress UI
+  const progressOverlay = document.getElementById('progressOverlay');
+  const progressTitle = document.getElementById('progressTitle');
+  const progressText = document.getElementById('progressText');
+  const progressFill = document.getElementById('progressFill');
+  const progressPercent = document.getElementById('progressPercent');
+
+  function showProgress(title, text, percent) {
+    progressTitle.textContent = title;
+    progressText.textContent = text;
+    progressFill.style.width = percent + '%';
+    progressPercent.textContent = Math.round(percent) + '%';
+    progressOverlay.classList.add('active');
+  }
+
+  function updateProgress(current, total, title) {
+    const percent = (current / total) * 100;
+    progressFill.style.width = percent + '%';
+    progressPercent.textContent = Math.round(percent) + '%';
+    if (title) progressTitle.textContent = title;
+    progressText.textContent = t('msg_processedN', { c: current, t: total });
+  }
+
+  function hideProgress() {
+    progressOverlay.classList.remove('active');
+  }
+
+
+  // PDF Generation & Download
+  generateBtn.addEventListener('click', async () => {
+    if (state.images.length === 0) return;
+    haptic('medium');
+
+    try {
+      generateBtn.disabled = true;
+      generateBtnContent.innerHTML = `<span class="spinner"></span> ${t('msg_generating')}`;
+
+      const { jsPDF } = window.jspdf;
+      const A4_PORTRAIT = { w: 210, h: 297 };
+      const A4_LANDSCAPE = { w: 297, h: 210 };
+
+      let pdf = null;
+      const total = state.images.length;
+
+      for (let i = 0; i < total; i++) {
+        const img = state.images[i];
+        
+        progressTitle.textContent = t('msg_generating');
+        progressText.textContent = t('msg_addingPage', { c: i + 1, t: total });
+        const percent = ((i + 1) / total) * 100;
+        progressFill.style.width = percent + '%';
+        progressPercent.textContent = Math.round(percent) + '%';
+        progressOverlay.classList.add('active');
+
+        // Microtask yield
+        await new Promise(r => setTimeout(r, 0));
+
+        let orientation = 'p';
+        if (state.orientation === 'portrait') orientation = 'p';
+        else if (state.orientation === 'landscape') orientation = 'l';
+        else orientation = img.width > img.height ? 'l' : 'p';
+
+        const pageDim = orientation === 'p' ? A4_PORTRAIT : A4_LANDSCAPE;
+        
+        if (i === 0) {
+          pdf = new jsPDF({ orientation: orientation, unit: 'mm', format: 'a4', compress: true });
+        } else {
+          pdf.addPage('a4', orientation);
+        }
+
+        const margin = 10;
+        const maxW = pageDim.w - margin * 2;
+        const maxH = pageDim.h - margin * 2;
+        const imgRatio = img.width / img.height;
+        const pageRatio = maxW / maxH;
+
+        let renderW, renderH;
+        if (imgRatio > pageRatio) {
+          renderW = maxW; renderH = maxW / imgRatio;
+        } else {
+          renderH = maxH; renderW = maxH * imgRatio;
+        }
+
+        const x = (pageDim.w - renderW) / 2;
+        const y = (pageDim.h - renderH) / 2;
+        const format = img.dataUrl.includes('data:image/png') ? 'PNG' : 'JPEG';
+        
+        pdf.addImage(img.dataUrl, format, x, y, renderW, renderH, undefined, 'FAST');
+      }
+
+      progressTitle.textContent = t('msg_saving');
+      progressText.textContent = t('msg_downloading');
+      progressFill.style.width = '100%';
+      progressPercent.textContent = '100%';
+
+      const fileName = `Scans_Document_${Date.now()}.pdf`;
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      
+      // Fallback Logic for Telegram WebView (iOS/Android constraints)
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+
+      try {
+        a.click();
+        haptic('success');
+      } catch (e) {
+        // Safe fallback if simulated click is blocked
+        if (confirm(t('msg_downloadFallback'))) {
+          window.open(blobUrl, '_blank');
+        }
+      }
+
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+
+      hideProgress();
+      showToast(t('msg_pdfSuccess'), 'success');
+
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      haptic('error');
+      hideProgress();
+      showToast(t('msg_pdfError') + ': ' + err.message, 'error');
+    } finally {
+      generateBtn.disabled = state.images.length === 0;
+      generateBtnContent.innerHTML = t('ui_generateBtn');
+    }
+  });
+
+  // Init
+  renderGrid();
+
+})();
+</script>
+</body>
+</html>
