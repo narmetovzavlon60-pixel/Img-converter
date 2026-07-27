@@ -1268,9 +1268,25 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   window.addEventListener('error', (e) => emergencyResetUI(e.message || e));
   window.addEventListener('unhandledrejection', (e) => emergencyResetUI(e.reason));
 
+  // ВАЖНО: у Telegram два разных метода вибро-отклика:
+  //   - impactOccurred(style) принимает ТОЛЬКО 'light'|'medium'|'heavy'|'rigid'|'soft'
+  //   - notificationOccurred(type) принимает 'success'|'error'|'warning'
+  // Раньше 'success'/'error' передавались в impactOccurred, что вызывало
+  // WebAppHapticImpactStyleInvalid и роняло весь процесс генерации PDF.
+  const NOTIFICATION_STYLES = ['success', 'error', 'warning'];
   function haptic(style = 'light') {
-    if (tg && tg.HapticFeedback) {
-      tg.HapticFeedback.impactOccurred(style);
+    if (!tg || !tg.HapticFeedback) return;
+    try {
+      if (NOTIFICATION_STYLES.includes(style)) {
+        tg.HapticFeedback.notificationOccurred(style);
+      } else {
+        tg.HapticFeedback.impactOccurred(style);
+      }
+    } catch (e) {
+      // Вибро-отклик — второстепенная функция, ошибка здесь никогда
+      // не должна ломать основной процесс (генерацию/скачивание PDF)
+      if (typeof dlog === 'function') dlog('haptic() предупреждение: ' + e);
+      console.warn('haptic failed:', e);
     }
   }
 
