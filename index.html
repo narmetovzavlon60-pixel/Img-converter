@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f172a">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Image to PDF Converter</title>
 <!-- Telegram WebApp SDK -->
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -1053,6 +1056,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 <div class="container">
   <!-- Header & i18n -->
   <div class="top-bar">
+    <button class="lang-btn" id="debugToggleBtn" style="border:1px solid var(--border); border-radius:20px; margin-right:8px;">🐞</button>
     <div class="lang-switch" id="langSwitch">
       <button class="lang-btn active" data-lang="ru">RU</button>
       <button class="lang-btn" data-lang="uz">UZ</button>
@@ -1152,6 +1156,33 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
 <div class="toast" id="toast"></div>
 
+<!-- Debug Panel -->
+<div class="overlay" id="debugOverlay">
+  <div class="overlay-card" style="max-width: 92vw; width: 92vw; text-align: left;">
+    <div class="overlay-title">🐞 Отладочный лог</div>
+    <div class="overlay-text" style="text-align:left;">
+      Скопируйте текст ниже и пришлите разработчику — так проще найти причину.
+    </div>
+    <div id="debugLog" style="
+        background:#000;
+        color:#0f0;
+        font-family: monospace;
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: left;
+        max-height: 50vh;
+        overflow-y: auto;
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      "></div>
+    <button class="btn-copy" id="copyDebugBtn" style="width:100%; padding:10px; margin-bottom:8px;">Скопировать лог</button>
+    <button class="btn-close" id="closeDebugBtn">Закрыть</button>
+  </div>
+</div>
+
 <script>
 (function() {
   'use strict';
@@ -1163,12 +1194,57 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     tg.expand();
   }
 
+  // ==================== ВСТРОЕННАЯ ПАНЕЛЬ ОТЛАДКИ ====================
+  // Позволяет увидеть реальные ошибки прямо на экране телефона,
+  // без необходимости подключать компьютер и USB-отладку.
+  const debugLines = [];
+  function dlog(msg) {
+    const time = new Date().toISOString().substr(11, 12);
+    const line = `[${time}] ${msg}`;
+    debugLines.push(line);
+    const panel = document.getElementById('debugLog');
+    if (panel) {
+      panel.textContent = debugLines.join('\n');
+      panel.scrollTop = panel.scrollHeight;
+    }
+    console.log(line);
+  }
+
+  dlog('=== Страница загружена ===');
+  dlog('User-Agent: ' + navigator.userAgent);
+  dlog('Telegram WebApp SDK доступен: ' + !!tg);
+  if (tg) {
+    dlog('Telegram platform: ' + (tg.platform || 'unknown') + ', версия: ' + (tg.version || 'unknown'));
+  }
+  dlog('jsPDF доступен сразу после загрузки: ' + !!(window.jspdf && window.jspdf.jsPDF));
+  dlog('navigator.share доступен: ' + !!navigator.share);
+  dlog('navigator.canShare доступен: ' + !!navigator.canShare);
+
+  document.getElementById('debugToggleBtn').addEventListener('click', () => {
+    document.getElementById('debugOverlay').classList.add('active');
+  });
+  document.getElementById('closeDebugBtn').addEventListener('click', () => {
+    document.getElementById('debugOverlay').classList.remove('active');
+  });
+  document.getElementById('copyDebugBtn').addEventListener('click', () => {
+    const text = debugLines.join('\n');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Лог скопирован!', 'success');
+      }).catch(() => {
+        showToast('Не удалось скопировать — выделите текст вручную', 'error');
+      });
+    }
+  });
+  // ==================== /ПАНЕЛЬ ОТЛАДКИ ====================
+
   // ЗАЩИТНАЯ СЕТКА: если где-то произойдёт неотловленная ошибка (например,
   // библиотека не успела инициализироваться), кнопка не должна "зависать"
   // молча на надписи "Генерация PDF..." — сбрасываем интерфейс и показываем
   // понятное сообщение.
   function emergencyResetUI(reason) {
     try {
+      dlog('❌ EMERGENCY RESET: ' + (reason && reason.stack ? reason.stack : reason));
       console.error('Emergency UI reset:', reason);
       const btn = document.getElementById('generateBtn');
       const btnContent = document.getElementById('generateBtnContent');
@@ -1457,8 +1533,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
   async function processFiles(files) {
     if (!files || files.length === 0) return;
+    dlog(`processFiles: получено ${files.length} файл(ов)`);
 
     let fileArray = Array.from(files).filter(f => f.type.startsWith('image/'));
+    dlog(`processFiles: после фильтра по типу image/*: ${fileArray.length}`);
     
     if (fileArray.length === 0) {
       showToast(t('msg_needImages'), 'error');
@@ -1504,6 +1582,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     }
 
     state.images.push(...newImages);
+    dlog(`processFiles: успешно добавлено ${newImages.length} изображений. Всего в списке: ${state.images.length}`);
     hideProgress();
     renderGrid();
     
@@ -1686,24 +1765,31 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    */
   async function handleDownloadClick() {
     if (!generatedPdfBlob) {
+      dlog('handleDownloadClick: generatedPdfBlob отсутствует!');
       showToast(t('msg_needImages'), 'error');
       return;
     }
+    dlog(`▶️ Клик "Скачать PDF". Размер blob: ${generatedPdfBlob.size} байт`);
     haptic('medium');
     const fileName = generatedFileName || `Scans_Document_${Date.now()}.pdf`;
 
     // 1) Нативный Share Sheet (наиболее стабильный способ в Telegram WebView)
     try {
+      dlog('Способ 1: navigator.share. share=' + !!navigator.share + ', canShare=' + !!navigator.canShare);
       if (navigator.share && navigator.canShare) {
         const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
-        if (navigator.canShare({ files: [file] })) {
+        const can = navigator.canShare({ files: [file] });
+        dlog('navigator.canShare({files}) = ' + can);
+        if (can) {
           await navigator.share({ files: [file], title: fileName });
+          dlog('✅ navigator.share() успешно выполнен');
           haptic('success');
           showToast(t('msg_pdfSuccess'), 'success');
           return;
         }
       }
     } catch (shareErr) {
+      dlog('Способ 1 не сработал: ' + (shareErr && shareErr.name) + ' — ' + (shareErr && shareErr.message));
       // Пользователь отменил системный диалог шаринга — это не ошибка
       if (shareErr && shareErr.name === 'AbortError') return;
       console.warn('navigator.share недоступен или упал, пробуем fallback:', shareErr);
@@ -1712,6 +1798,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     // 2) Прямой клик по <a download="..."> — безопасно, т.к. вызывается
     //    синхронно внутри реального клика пользователя
     try {
+      dlog('Способ 2: <a download> через blob URL');
       const blobUrl = URL.createObjectURL(generatedPdfBlob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -1721,27 +1808,33 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+      dlog('✅ Способ 2: клик по <a> выполнен без исключений');
       haptic('success');
       showToast(t('msg_pdfSuccess'), 'success');
       return;
     } catch (linkErr) {
+      dlog('Способ 2 не сработал: ' + linkErr);
       console.warn('Прямое скачивание через <a> не удалось:', linkErr);
     }
 
     // 3) tg.openLink — открывает blob через системный браузер Telegram
     try {
+      dlog('Способ 3: tg.openLink. tg=' + !!tg + ', tg.openLink=' + !!(tg && tg.openLink));
       if (tg && tg.openLink) {
         const blobUrl = URL.createObjectURL(generatedPdfBlob);
         tg.openLink(blobUrl, { try_instant_view: false });
         setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        dlog('✅ Способ 3: tg.openLink вызван без исключений');
         showToast(t('msg_downloadFallback'), 'success');
         return;
       }
     } catch (tgErr) {
+      dlog('Способ 3 не сработал: ' + tgErr);
       console.warn('tg.openLink не сработал:', tgErr);
     }
 
     // 4) Последний рубеж — data URI в новом окне/вкладке
+    dlog('Способ 4: попытка через FileReader + window.open(data URI)');
     try {
       const reader = new FileReader();
       reader.onload = () => {
@@ -1774,6 +1867,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
     if (state.images.length === 0) return;
     haptic('medium');
+    dlog(`▶️ Клик "Сформировать PDF". Изображений: ${state.images.length}, ориентация: ${state.orientation}`);
 
     try {
       generateBtn.disabled = true;
@@ -1781,6 +1875,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 
       // Явная проверка: библиотека должна быть доступна (она теперь вшита
       // в файл локально, но на всякий случай — понятная ошибка вместо "зависания")
+      dlog('Проверка window.jspdf: ' + !!(window.jspdf && window.jspdf.jsPDF));
       if (!window.jspdf || !window.jspdf.jsPDF) {
         throw new Error('jsPDF library not available');
       }
@@ -1809,6 +1904,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         // Отдаём управление браузеру перед тяжёлой операцией (addImage),
         // чтобы UI успевал перерисовываться на слабых устройствах
         await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+        dlog(`Страница ${i + 1}/${total}: обработка изображения ${img.width}x${img.height}, размер dataURL: ${img.dataUrl.length} символов`);
 
         let orientation = 'p';
         if (state.orientation === 'portrait') orientation = 'p';
@@ -1858,6 +1955,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       // скрытые ссылки без прямого физического взаимодействия пользователя.
       generatedPdfBlob = pdf.output('blob');
       generatedFileName = fileName;
+      dlog(`✅ PDF собран успешно. Размер blob: ${generatedPdfBlob.size} байт`);
 
       hideProgress();
       haptic('success');
@@ -1870,6 +1968,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       showToast(t('msg_pdfReady'), 'success');
 
     } catch (err) {
+      dlog('❌ ОШИБКА ГЕНЕРАЦИИ: ' + (err && err.stack ? err.stack : err));
       console.error('PDF generation error:', err);
       haptic('error');
       hideProgress();
