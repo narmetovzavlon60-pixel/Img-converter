@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Тест выбора файлов</title>
+    <title>Конвертер изображений в PDF</title>
+    <!-- Подключаем jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body {
             background-color: #121212;
             color: #ffffff;
             padding: 16px;
-            font-family: monospace;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         .container {
             display: flex;
@@ -18,7 +20,6 @@
             max-width: 600px;
             margin: 0 auto;
         }
-        /* Контейнер кнопки с относительным позиционированием */
         .upload-btn-wrapper {
             position: relative;
             overflow: hidden;
@@ -31,7 +32,6 @@
             font-weight: bold;
             cursor: pointer;
         }
-        /* Инпут растянут на всю кнопку и полностью прозрачен, но доступен для прямого тапа */
         .upload-btn-wrapper input[type="file"] {
             position: absolute;
             left: 0;
@@ -57,79 +57,196 @@
             height: 100%;
             object-fit: cover;
         }
-        #consoleLog {
-            background: #000;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 12px;
-            font-size: 12px;
-            height: 180px;
-            overflow-y: auto;
-            color: #00ff00;
+        .btn {
+            background-color: #059669;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: bold;
+            width: 100%;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn:disabled {
+            background-color: #374151;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #statusText {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #9ca3af;
+            min-height: 20px;
+        }
+        #pdfViewer {
+            width: 100%;
+            height: 350px;
+            border: 1px solid #374151;
+            border-radius: 10px;
+            display: none;
+            background: #fff;
         }
     </style>
 </head>
 <body>
     <div class="container">
-<h2>Тест прямого выбора файлов</h2>
+        <h2>Конвертер изображений в PDF</h2>
 
-        <!-- Прямой тап по прозрачному инпуту -->
         <div class="upload-btn-wrapper">
-            📁 Выбрать фото с телефона
+            📁 Выбрать фотографии
             <input type="file" id="imageInput" accept="image/*" multiple>
         </div>
 
         <div class="previews" id="previewsContainer"></div>
+        
+        <div id="statusText">Выберите изображения для начала</div>
 
-        <h3>Лог отладки:</h3>
-        <div id="consoleLog">Ожидание действий...<br></div>
+        <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
+
+        <iframe id="pdfViewer"></iframe>
     </div>
 
     <script>
-        const logBox = document.getElementById('consoleLog');
-        function log(text) {
-            console.log(text);
-            logBox.innerHTML += `> ${text}<br>`;
-            logBox.scrollTop = logBox.scrollHeight;
-        }
+        let selectedFiles = [];
 
         const imageInput = document.getElementById('imageInput');
         const previewsContainer = document.getElementById('previewsContainer');
-
-        log("Скрипт инициализирован успешно.");
+        const convertBtn = document.getElementById('convertBtn');
+        const statusText = document.getElementById('statusText');
+        const pdfViewer = document.getElementById('pdfViewer');
 
         imageInput.addEventListener('change', (e) => {
-            log("🎯 Сработало событие change!");
             const files = e.target.files;
-            
-            if (!files || files.length === 0) {
-                log("⚠️ Файлы не выбраны.");
+            if (!files || files.length === 0) return;
+
+            selectedFiles = Array.from(files);
+            previewsContainer.innerHTML = '';
+            pdfViewer.style.display = 'none';
+
+            selectedFiles.forEach((file, index) => {
+                const objectURL = URL.createObjectURL(file);
+                const div = document.createElement('div');
+                div.className = 'preview-item';
+                
+                const img = document.createElement('img');
+                img.src = objectURL;
+                img.onload = () => URL.revokeObjectURL(objectURL);
+
+                div.appendChild(img);
+                previewsContainer.appendChild(div);
+            });
+
+            convertBtn.disabled = false;
+            statusText.textContent = `Выбрано файлов: ${selectedFiles.length}`;
+        });
+
+        convertBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+
+            if (typeof window.jspdf === 'undefined') {
+                statusText.textContent = 'Ошибка: Библиотека jsPDF не загружена';
                 return;
             }
 
-            log(`Успешно получено файлов: ${files.length}`);
+            convertBtn.disabled = true;
+            statusText.textContent = 'Генерация PDF, подождите...';
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                log(`Файл [${i}]: ${file.name} (${file.type}, ${file.size} байт)`);
+            try {
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
 
-                try {
-                    const objectURL = URL.createObjectURL(file);
-                    const div = document.createElement('div');
-                    div.className = 'preview-item';
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 10;
+
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    statusText.textContent = `Обработка изображения ${i + 1} из ${selectedFiles.length}...`;
                     
-                    const img = document.createElement('img');
-                    img.src = objectURL;
-                    img.onload = () => log(`✅ Превью [${i}] отрисовано`);
-                    img.onerror = (err) => log(`❌ Ошибка картинки: ${err}`);
+                    const dataUrl = await fileToCompressedDataUri(selectedFiles[i]);
+                    const img = await loadImage(dataUrl);
 
-                    div.appendChild(img);
-                    previewsContainer.appendChild(div);
-                } catch (err) {
-                    log(`❌ Ошибка ObjectURL: ${err.message}`);
+                    if (i > 0) {
+                        pdf.addPage();
+                    }
+
+                    let imgWidth = pageWidth - (margin * 2);
+                    let imgHeight = (img.height * imgWidth) / img.width;
+
+                    if (imgHeight > (pageHeight - (margin * 2))) {
+                        imgHeight = pageHeight - (margin * 2);
+                        imgWidth = (img.width * imgHeight) / img.height;
+                    }
+
+                    const x = (pageWidth - imgWidth) / 2;
+                    const y = (pageHeight - imgHeight) / 2;
+
+                    pdf.addImage(dataUrl, 'JPEG', x, y, imgWidth, imgHeight);
                 }
+
+                statusText.textContent = 'Готово! PDF отображен ниже.';
+                const pdfDataUri = pdf.output('datauristring');
+                
+                pdfViewer.src = pdfDataUri;
+                pdfViewer.style.display = 'block';
+                convertBtn.disabled = false;
+
+            } catch (error) {
+                console.error(error);
+                statusText.textContent = 'Ошибка генерации: ' + error.message;
+                convertBtn.disabled = false;
             }
         });
+
+        function fileToCompressedDataUri(file) {
+            return new Promise((resolve, reject) => {
+                const objectURL = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(objectURL);
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    const MAX_DIM = 1600;
+                    if (width > MAX_DIM || height > MAX_DIM) {
+                        if (width > height) {
+                            height = Math.round((height * MAX_DIM) / width);
+                            width = MAX_DIM;
+                        } else {
+                            width = Math.round((width * MAX_DIM) / height);
+                            height = MAX_DIM;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    resolve(canvas.toDataURL('image/jpeg', 0.85));
+                };
+                img.onerror = (err) => {
+                    URL.revokeObjectURL(objectURL);
+                    reject(err);
+                };
+                img.src = objectURL;
+            });
+        }
+
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
     </script>
 </body>
 </html>
