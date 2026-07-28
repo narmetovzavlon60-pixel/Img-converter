@@ -3,306 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Конвертер изображений в PDF</title>
-    <!-- Подключаем jsPDF с проверенного CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <title>Тест выбора файлов</title>
     <style>
-        :root {
-            --bg-color: var(--tg-theme-bg-color, #f4f4f5);
-            --text-color: var(--tg-theme-text-color, #18181b);
-            --hint-color: var(--tg-theme-hint-color, #71717a);
-            --button-color: var(--tg-theme-button-color, #2563eb);
-            --button-text-color: var(--tg-theme-button-text-color, #ffffff);
-            --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
-        }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            background-color: #121212;
+            color: #ffffff;
             padding: 16px;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
+            font-family: monospace;
         }
-
         .container {
-            max-width: 600px;
-            margin: 0 auto;
-            width: 100%;
-            flex: 1;
             display: flex;
             flex-direction: column;
             gap: 16px;
+            max-width: 600px;
+            margin: 0 auto;
         }
-
-        h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-
-        .upload-card {
-            background-color: var(--card-bg);
-            border: 2px dashed var(--hint-color);
+        /* Контейнер кнопки с относительным позиционированием */
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            background: #2563eb;
+            color: white;
+            padding: 16px;
             border-radius: 12px;
-            padding: 24px;
             text-align: center;
+            font-size: 1rem;
+            font-weight: bold;
             cursor: pointer;
-            transition: border-color 0.2s;
         }
-
-        .upload-card:active {
-            opacity: 0.8;
+        /* Инпут растянут на всю кнопку и полностью прозрачен, но доступен для прямого тапа */
+        .upload-btn-wrapper input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
         }
-
-        .upload-card input[type="file"] {
-            display: none;
-        }
-
-        .upload-text {
-            color: var(--hint-color);
-            font-size: 0.95rem;
-        }
-
-        .previews-container {
+        .previews {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
             gap: 8px;
-            max-height: 200px;
-            overflow-y: auto;
         }
-
         .preview-item {
-            position: relative;
             aspect-ratio: 1;
             border-radius: 8px;
             overflow: hidden;
-            background: #e2e8f0;
+            background: #333;
         }
-
         .preview-item img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-
-        .btn {
-            background-color: var(--button-color);
-            color: var(--button-text-color);
-            border: none;
-            border-radius: 10px;
-            padding: 14px;
-            font-size: 1rem;
-            font-weight: 500;
-            width: 100%;
-            cursor: pointer;
-            text-align: center;
-            transition: opacity 0.2s;
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn:active:not(:disabled) {
-            opacity: 0.85;
-        }
-
-        .status {
-            text-align: center;
-            font-size: 0.9rem;
-            color: var(--hint-color);
-            min-height: 20px;
-        }
-
-        .actions-box {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: auto;
+        #consoleLog {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 12px;
+            height: 180px;
+            overflow-y: auto;
+            color: #00ff00;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Конвертер в PDF</h1>
+<h2>Тест прямого выбора файлов</h2>
 
-        <!-- Зона выбора файлов -->
-        <label class="upload-card">
+        <!-- Прямой тап по прозрачному инпуту -->
+        <div class="upload-btn-wrapper">
+            📁 Выбрать фото с телефона
             <input type="file" id="imageInput" accept="image/*" multiple>
-            <div class="upload-text">📁 Нажмите, чтобы выбрать изображения</div>
-        </label>
-
-        <!-- Превью выбранных картинок -->
-        <div class="previews-container" id="previewsContainer"></div>
-
-        <div class="status" id="statusText"></div>
-
-        <!-- Кнопки управления -->
-        <div class="actions-box">
-            <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
-            <button class="btn" id="actionBtn" style="display: none;">💾 Скачать / Поделиться PDF</button>
         </div>
+
+        <div class="previews" id="previewsContainer"></div>
+
+        <h3>Лог отладки:</h3>
+        <div id="consoleLog">Ожидание действий...<br></div>
     </div>
 
     <script>
-        let selectedFiles = [];
-        let generatedPdfBlob = null;
-        let generatedPdfName = "document.pdf";
+        const logBox = document.getElementById('consoleLog');
+        function log(text) {
+            console.log(text);
+            logBox.innerHTML += `> ${text}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
 
         const imageInput = document.getElementById('imageInput');
         const previewsContainer = document.getElementById('previewsContainer');
-        const convertBtn = document.getElementById('convertBtn');
-        const actionBtn = document.getElementById('actionBtn');
-        const statusText = document.getElementById('statusText');
 
-        imageInput.addEventListener('change', async (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length === 0) return;
+        log("Скрипт инициализирован успешно.");
 
-            selectedFiles = files;
-            await renderPreviews();
-            convertBtn.disabled = false;
-            actionBtn.style.display = 'none';
-            statusText.textContent = `Выбрано изображений: ${selectedFiles.length}`;
-        });
+        imageInput.addEventListener('change', (e) => {
+            log("🎯 Сработало событие change!");
+            const files = e.target.files;
+            
+            if (!files || files.length === 0) {
+                log("⚠️ Файлы не выбраны.");
+                return;
+            }
 
-        async function renderPreviews() {
-            previewsContainer.innerHTML = '';
-            for (const file of selectedFiles) {
+            log(`Успешно получено файлов: ${files.length}`);
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                log(`Файл [${i}]: ${file.name} (${file.type}, ${file.size} байт)`);
+
                 try {
-                    const dataUrl = await readFileAsDataURL(file);
+                    const objectURL = URL.createObjectURL(file);
                     const div = document.createElement('div');
                     div.className = 'preview-item';
-                    div.innerHTML = `<img src="${dataUrl}" alt="preview">`;
+                    
+                    const img = document.createElement('img');
+                    img.src = objectURL;
+                    img.onload = () => log(`✅ Превью [${i}] отрисовано`);
+                    img.onerror = (err) => log(`❌ Ошибка картинки: ${err}`);
+
+                    div.appendChild(img);
                     previewsContainer.appendChild(div);
                 } catch (err) {
-                    console.error("Ошибка чтения превью:", err);
+                    log(`❌ Ошибка ObjectURL: ${err.message}`);
                 }
             }
-        }
-
-        convertBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0) return;
-
-            convertBtn.disabled = true;
-            statusText.textContent = 'Создание PDF... Пожалуйста, подождите.';
-
-            try {
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                const margin = 10;
-
-                for (let i = 0; i < selectedFiles.length; i++) {
-                    const file = selectedFiles[i];
-                    statusText.textContent = `Обработка изображения ${i + 1} из ${selectedFiles.length}...`;
-
-                    const dataUrl = await readFileAsDataURL(file);
-                    const img = await loadImage(dataUrl);
-
-                    if (i > 0) {
-                        pdf.addPage();
-                    }
-
-                    let imgWidth = pageWidth - (margin * 2);
-                    let imgHeight = (img.height * imgWidth) / img.width;
-
-                    if (imgHeight > (pageHeight - (margin * 2))) {
-                        imgHeight = pageHeight - (margin * 2);
-                        imgWidth = (img.width * imgHeight) / img.height;
-                    }
-
-                    const x = (pageWidth - imgWidth) / 2;
-                    const y = (pageHeight - imgHeight) / 2;
-
-                    pdf.addImage(dataUrl, 'JPEG', x, y, imgWidth, imgHeight);
-                }
-
-                generatedPdfBlob = pdf.output('blob');
-                generatedPdfName = `converted_${Date.now()}.pdf`;
-
-                statusText.textContent = 'PDF успешно создан!';
-                convertBtn.disabled = false;
-                actionBtn.style.display = 'block';
-
-            } catch (error) {
-                console.error(error);
-                statusText.textContent = 'Ошибка при создании PDF: ' + error.message;
-                convertBtn.disabled = false;
-            }
-        });
-
-        function readFileAsDataURL(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = (error) => reject(error);
-                reader.readAsDataURL(file);
-            });
-        }
-
-        function loadImage(src) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = (error) => reject(error);
-                img.src = src;
-            });
-        }
-
-        actionBtn.addEventListener('click', async () => {
-            if (!generatedPdfBlob) return;
-
-            const file = new File([generatedPdfBlob], generatedPdfName, { type: 'application/pdf' });
-
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Готовый PDF документ',
-                        text: 'Создано через конвертер'
-                    });
-                    return;
-                } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        console.log('Share API fallback', err);
-                    } else {
-                        return;
-                    }
-                }
-            }
-
-            const url = URL.createObjectURL(generatedPdfBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = generatedPdfName;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            
-            a.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 1000);
-
-            statusText.textContent = 'Файл отправлен на скачивание!';
         });
     </script>
 </body>
