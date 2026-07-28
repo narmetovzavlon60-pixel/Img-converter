@@ -1,304 +1,699 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Конвертер изображений в PDF</title>
-    <!-- Подключаем jsPDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            padding: 16px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        .upload-btn-wrapper {
-            position: relative;
-            overflow: hidden;
-            background: #2563eb;
-            color: white;
-            padding: 16px;
-            border-radius: 12px;
-            text-align: center;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .upload-btn-wrapper input[type="file"] {
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        .previews {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-            gap: 8px;
-        }
-        .preview-item {
-            aspect-ratio: 1;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #333;
-        }
-        .preview-item img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .btn {
-            background-color: #059669;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 14px;
-            font-size: 1rem;
-            font-weight: bold;
-            width: 100%;
-            cursor: pointer;
-            text-align: center;
-            text-decoration: none;
-            display: block;
-            box-sizing: border-box;
-        }
-        .btn:disabled {
-            background-color: #374151;
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .btn-secondary {
-            background-color: #2563eb;
-        }
-        #statusText {
-            text-align: center;
-            font-size: 0.9rem;
-            color: #9ca3af;
-            min-height: 20px;
-        }
-        #resultContainer {
-            display: none;
-            flex-direction: column;
-            gap: 12px;
-            background: #1e1e1e;
-            padding: 16px;
-            border-radius: 12px;
-            border: 1px solid #374151;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Images to PDF Converter</title>
+  <!-- jsPDF 2.5.1 UMD -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a1f;
+      background: linear-gradient(145deg, #121215 0%, #1e1e24 100%);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 16px;
+      color: #e4e4e7;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 500px;
+      background: rgba(30, 30, 36, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 28px;
+      padding: 20px 16px 28px;
+      box-shadow: 0 25px 50px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      animation: fadeUp 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .header h1 {
+      font-size: 1.7rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      letter-spacing: 0.01em;
+    }
+
+    .upload-zone {
+      background: rgba(255, 255, 255, 0.03);
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .upload-zone:active {
+      background: rgba(96, 165, 250, 0.08);
+      border-color: #60a5fa;
+      transform: scale(0.98);
+    }
+
+    .upload-zone .icon-circle {
+      width: 56px;
+      height: 56px;
+      background: rgba(96, 165, 250, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+
+    .upload-zone span {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #d1d5db;
+    }
+
+    .upload-zone small {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 10px;
+      max-height: 260px;
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: #3b3b44 transparent;
+    }
+
+    .preview-grid::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .preview-grid::-webkit-scrollbar-thumb {
+      background: #3b3b44;
+      border-radius: 8px;
+    }
+
+    .preview-item {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #23232a;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s;
+      animation: popIn 0.25s ease-out;
+    }
+
+    @keyframes popIn {
+      from {
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .preview-item .remove-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 24px;
+      height: 24px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      border-radius: 50%;
+      border: none;
+      color: #fca5a5;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      padding: 0;
+      font-weight: bold;
+    }
+
+    .preview-item .remove-btn:active {
+      background: #ef4444;
+      color: white;
+      transform: scale(1.1);
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      flex: 1 1 auto;
+      min-width: 100px;
+      padding: 14px 18px;
+      border-radius: 18px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      letter-spacing: 0.01em;
+      background: #2a2a32;
+      color: #d1d5db;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+      filter: brightness(1.2);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      pointer-events: none;
+      filter: grayscale(0.5);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      color: white;
+      box-shadow: 0 6px 18px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-accent {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 6px 18px rgba(245, 158, 11, 0.3);
+    }
+
+    .status-message {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      min-height: 20px;
+      transition: all 0.3s;
+      word-break: break-word;
+    }
+
+    .status-message.success {
+      color: #34d399;
+    }
+
+    .status-message.error {
+      color: #f87171;
+    }
+
+    .count-badge {
+      background: rgba(96, 165, 250, 0.2);
+      color: #93c5fd;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      align-self: center;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Конвертер изображений в PDF</h2>
-
-        <div class="upload-btn-wrapper">
-            📁 Выбрать фотографии
-            <input type="file" id="imageInput" accept="image/*" multiple>
-        </div>
-
-        <div class="previews" id="previewsContainer"></div>
-        
-        <div id="statusText">Выберите изображения для начала</div>
-
-        <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
-
-        <!-- Блок результата на базе Data URI -->
-        <div id="resultContainer">
-            <div style="font-weight: bold; text-align: center; color: #10b981;">PDF успешно создан!</div>
-            
-            <!-- Прямая ссылка с Data URI для скачивания -->
-            <a id="downloadLink" class="btn" download="document.pdf">💾 Скачать PDF файл</a>
-            
-            <!-- Кнопка принудительного открытия в новом окне -->
-            <button class="btn btn-secondary" id="openBtn">🔍 Просмотреть / Открыть PDF</button>
-        </div>
+  <div class="app-container">
+    <div class="header">
+      <h1>📄 Изображения в PDF</h1>
+      <p>Выберите фото, сожмите и соберите в документ</p>
     </div>
 
-    <script>
-        let selectedFiles = [];
-        let generatedDataUri = null;
+    <!-- Зона загрузки -->
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon-circle">🖼️</div>
+      <span>Нажмите, чтобы выбрать фото</span>
+      <small>JPG, PNG, WEBP • До 20 шт.</small>
+    </div>
+    <input type="file" id="fileInput" multiple accept="image/*">
 
-        const imageInput = document.getElementById('imageInput');
-        const previewsContainer = document.getElementById('previewsContainer');
-        const convertBtn = document.getElementById('convertBtn');
-        const statusText = document.getElementById('statusText');
-        const resultContainer = document.getElementById('resultContainer');
-        const downloadLink = document.getElementById('downloadLink');
-        const openBtn = document.getElementById('openBtn');
+    <!-- Счетчик и превью -->
+    <div class="count-badge hidden" id="countBadge">0 изображений</div>
+    <div class="preview-grid hidden" id="previewGrid"></div>
 
-        imageInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (!files || files.length === 0) return;
+    <!-- Кнопки действий -->
+    <div class="action-buttons">
+      <button class="btn btn-primary" id="generateBtn" disabled>
+        <span>⚙️</span> Создать PDF
+      </button>
+      <button class="btn btn-success hidden" id="viewBtn">
+        <span>👁️</span> Открыть
+      </button>
+      <button class="btn btn-accent hidden" id="downloadBtn">
+        <span>⬇️</span> Скачать
+      </button>
+    </div>
 
-            selectedFiles = Array.from(files);
-            previewsContainer.innerHTML = '';
-            resultContainer.style.display = 'none';
+    <!-- Статус -->
+    <div class="status-message" id="statusMessage"></div>
+  </div>
 
-            selectedFiles.forEach((file) => {
-                const objectURL = URL.createObjectURL(file);
-                const div = document.createElement('div');
-                div.className = 'preview-item';
-                
-                const img = document.createElement('img');
-                img.src = objectURL;
-                img.onload = () => URL.revokeObjectURL(objectURL);
+  <script>
+    (function() {
+      // --- DOM элементы ---
+      const uploadZone = document.getElementById('uploadZone');
+      const fileInput = document.getElementById('fileInput');
+      const previewGrid = document.getElementById('previewGrid');
+      const countBadge = document.getElementById('countBadge');
+      const generateBtn = document.getElementById('generateBtn');
+      const viewBtn = document.getElementById('viewBtn');
+      const downloadBtn = document.getElementById('downloadBtn');
+      const statusMessage = document.getElementById('statusMessage');
 
-                div.appendChild(img);
-                previewsContainer.appendChild(div);
-            });
+      // --- Состояние ---
+      let imageFiles = []; // массив File объектов (оригиналы)
+      let compressedDataUrls = []; // массив сжатых Data URL (base64)
+      let generatedPdfDataUri = null; // итоговый PDF Data URI
 
-            convertBtn.disabled = false;
-            statusText.textContent = `Выбрано файлов: ${selectedFiles.length}`;
+      // --- Инициализация Telegram WebApp (если доступен) ---
+      let tg = null;
+      if (typeof window.Telegram !== 'undefined' && window.Telegram.WebApp) {
+        tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        // Применяем цветовую схему Telegram, если она тёмная/светлая
+        if (tg.colorScheme === 'dark') {
+          document.body.style.background = '#1a1a1f';
+        }
+      }
+
+      // --- Вспомогательные функции ---
+      function setStatus(text, type = '') {
+        statusMessage.textContent = text;
+        statusMessage.className = 'status-message ' + type;
+      }
+
+      function clearStatus() {
+        statusMessage.textContent = '';
+        statusMessage.className = 'status-message';
+      }
+
+      function updateUI() {
+        const count = compressedDataUrls.length;
+        if (count > 0) {
+          countBadge.textContent = `${count} изображени${getNumEnding(count)}`;
+          countBadge.classList.remove('hidden');
+          previewGrid.classList.remove('hidden');
+          generateBtn.disabled = false;
+        } else {
+          countBadge.classList.add('hidden');
+          previewGrid.classList.add('hidden');
+          generateBtn.disabled = true;
+          // Скрываем кнопки просмотра/скачивания, если PDF ещё не сгенерирован
+          if (!generatedPdfDataUri) {
+            viewBtn.classList.add('hidden');
+            downloadBtn.classList.add('hidden');
+          }
+        }
+      }
+
+      function getNumEnding(n) {
+        if (n % 10 === 1 && n % 100 !== 11) return 'е';
+        if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'я';
+        return 'й';
+      }
+
+      // --- Сжатие изображения через Canvas ---
+      function compressImage(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+              const maxSide = 1200;
+              let { width, height } = img;
+              if (width > maxSide || height > maxSide) {
+                if (width > height) {
+                  height = Math.round((height / width) * maxSide);
+                  width = maxSide;
+                } else {
+                  width = Math.round((width / height) * maxSide);
+                  height = maxSide;
+                }
+              }
+
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+
+              // Качество JPEG 0.8
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+              URL.revokeObjectURL(img.src); // очистка если была создана объектная ссылка
+              resolve(dataUrl);
+            };
+            img.onerror = function() {
+              reject(new Error('Не удалось загрузить изображение для сжатия.'));
+            };
+            // Используем Data URL напрямую из FileReader
+            img.src = e.target.result;
+          };
+          reader.onerror = function() {
+            reject(new Error('Ошибка чтения файла.'));
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // --- Добавление файлов ---
+      async function addFiles(files) {
+        if (!files || files.length === 0) return;
+
+        const MAX_IMAGES = 20;
+        const availableSlots = MAX_IMAGES - compressedDataUrls.length;
+        if (availableSlots <= 0) {
+          setStatus(`Максимум ${MAX_IMAGES} изображений.`, 'error');
+          return;
+        }
+
+        const filesToProcess = Array.from(files).slice(0, availableSlots);
+        if (files.length > availableSlots) {
+          setStatus(`Добавлено только ${availableSlots} из ${files.length} (лимит ${MAX_IMAGES}).`, 'error');
+        } else {
+          clearStatus();
+        }
+
+        setStatus('Сжатие изображений...', '');
+
+        for (const file of filesToProcess) {
+          // Проверка типа
+          if (!file.type.startsWith('image/')) {
+            setStatus(`Файл "${file.name}" не является изображением.`, 'error');
+            continue;
+          }
+          try {
+            const compressed = await compressImage(file);
+            compressedDataUrls.push(compressed);
+            imageFiles.push(file);
+            addPreviewItem(compressed, compressedDataUrls.length - 1);
+          } catch (err) {
+            setStatus(`Ошибка обработки "${file.name}": ${err.message}`, 'error');
+          }
+        }
+
+        updateUI();
+        if (compressedDataUrls.length > 0 && !statusMessage.textContent.includes('Ошибка')) {
+          setStatus('Изображения готовы к созданию PDF.', 'success');
+        }
+        // Сброс input, чтобы можно было выбрать те же файлы повторно
+        fileInput.value = '';
+      }
+
+      // --- Превью ---
+      function addPreviewItem(dataUrl, index) {
+        const item = document.createElement('div');
+        item.className = 'preview-item';
+        item.dataset.index = index;
+
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = 'preview';
+        img.loading = 'lazy';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.title = 'Удалить';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeImage(index);
         });
 
-        convertBtn.addEventListener('click', async () => {
-            if (selectedFiles.length === 0) return;
+        item.appendChild(img);
+        item.appendChild(removeBtn);
+        previewGrid.appendChild(item);
+      }
 
-            if (typeof window.jspdf === 'undefined') {
-                statusText.textContent = '❌ Ошибка: Библиотека jsPDF не загружена';
-                return;
-            }
+      function renderAllPreviews() {
+        previewGrid.innerHTML = '';
+        compressedDataUrls.forEach((dataUrl, idx) => {
+          addPreviewItem(dataUrl, idx);
+        });
+      }
 
-            convertBtn.disabled = true;
-            statusText.textContent = '🔄 Инициализация генератора...';
-            resultContainer.style.display = 'none';
+      function removeImage(index) {
+        if (index < 0 || index >= compressedDataUrls.length) return;
+        compressedDataUrls.splice(index, 1);
+        imageFiles.splice(index, 1);
+        // Сбрасываем PDF, так как набор изображений изменился
+        generatedPdfDataUri = null;
+        viewBtn.classList.add('hidden');
+        downloadBtn.classList.add('hidden');
+        renderAllPreviews();
+        updateUI();
+        if (compressedDataUrls.length === 0) {
+          setStatus('Все изображения удалены.', '');
+        } else {
+          setStatus('Изображение удалено. PDF нужно создать заново.', 'success');
+        }
+      }
 
-            try {
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
+      // --- Генерация PDF ---
+      async function generatePDF() {
+        if (compressedDataUrls.length === 0) {
+          setStatus('Нет изображений для конвертации.', 'error');
+          return;
+        }
 
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                const margin = 10;
+        setStatus('Создание PDF документа...', '');
+        generateBtn.disabled = true;
 
-                for (let i = 0; i < selectedFiles.length; i++) {
-                    statusText.textContent = `⏳ Обработка фото ${i + 1} из ${selectedFiles.length}...`;
-                    
-                    let dataUrl;
-                    try {
-                        dataUrl = await fileToCompressedDataUri(selectedFiles[i]);
-                    } catch (err) {
-                        throw new Error(`Сжатие файла ${i+1} не удалось: ${err.message}`);
-                    }
+        try {
+          // Используем глобальный jspdf из UMD сборки
+          const { jsPDF } = window.jspdf;
+          if (!jsPDF) throw new Error('jsPDF не загружен.');
 
-                    let img;
-                    try {
-                        img = await loadImage(dataUrl);
-                    } catch (err) {
-                        throw new Error(`Ошибка загрузки изображения ${i+1}: ${err.message}`);
-                    }
+          const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+            compress: true
+          });
 
-                    if (i > 0) {
-                        pdf.addPage();
-                    }
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 10;
+          const maxImageWidth = pageWidth - margin * 2;
+          const maxImageHeight = pageHeight - margin * 2;
 
-                    let imgWidth = pageWidth - (margin * 2);
-                    let imgHeight = (img.height * imgWidth) / img.width;
+          for (let i = 0; i < compressedDataUrls.length; i++) {
+            const dataUrl = compressedDataUrls[i];
+            // Создаём Image и добавляем в PDF
+            await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.onload = function() {
+                let imgW = img.width;
+                let imgH = img.height;
 
-                    if (imgHeight > (pageHeight - (margin * 2))) {
-                        imgHeight = pageHeight - (margin * 2);
-                        imgWidth = (img.width * imgHeight) / img.height;
-                    }
+                // Масштабируем, чтобы вписать в область печати
+                const ratio = Math.min(maxImageWidth / imgW, maxImageHeight / imgH);
+                imgW *= ratio;
+                imgH *= ratio;
 
-                    const x = (pageWidth - imgWidth) / 2;
-                    const y = (pageHeight - imgHeight) / 2;
+                // Центрируем по горизонтали
+                const x = margin + (maxImageWidth - imgW) / 2;
+                let y = margin;
 
-                    try {
-                        pdf.addImage(dataUrl, 'JPEG', x, y, imgWidth, imgHeight);
-                    } catch (err) {
-                        throw new Error(`Ошибка добавления в PDF: ${err.message}`);
-                    }
+                // Если не первая страница, добавляем новую
+                if (i > 0) {
+                  pdf.addPage();
                 }
 
-                statusText.textContent = '🔄 Финализация документа...';
-                
-                // Рендерим в Base64 (Data URI)
-                generatedDataUri = pdf.output('datauristring');
-                
-                downloadLink.href = generatedDataUri;
-                downloadLink.download = `document_${Date.now()}.pdf`;
+                // Проверка, помещается ли изображение по высоте (уже вписанное)
+                if (imgH > maxImageHeight) {
+                  // Если даже после масштабирования не влезает – всё равно вставляем, обрезая по нижнему краю
+                  // но лучше добавить страницу и попробовать ещё
+                  pdf.addPage();
+                }
 
-                resultContainer.style.display = 'flex';
-                statusText.textContent = '✅ Готово! Нажмите кнопку ниже.';
-                convertBtn.disabled = false;
-
-            } catch (error) {
-                console.error(error);
-                statusText.textContent = `❌ Сбой: ${error.message}`;
-                convertBtn.disabled = false;
-            }
-        });
-
-        openBtn.addEventListener('click', () => {
-            if (!generatedDataUri) return;
-            // Принудительно открываем Data URI в новом окне/вкладке
-            const newWindow = window.open();
-            if (newWindow) {
-                newWindow.document.write(`<iframe src="${generatedDataUri}" style="width:100%; height:100%; border:none; margin:0; padding:0;"></iframe>`);
-            } else {
-                window.location.href = generatedDataUri;
-            }
-        });
-
-        function fileToCompressedDataUri(file) {
-            return new Promise((resolve, reject) => {
-                const objectURL = URL.createObjectURL(file);
-                const img = new Image();
-                img.onload = () => {
-                    URL.revokeObjectURL(objectURL);
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    const MAX_DIM = 1200;
-                    if (width > MAX_DIM || height > MAX_DIM) {
-                        if (width > height) {
-                            height = Math.round((height * MAX_DIM) / width);
-                            width = MAX_DIM;
-                        } else {
-                            width = Math.round((width * MAX_DIM) / height);
-                            height = MAX_DIM;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    resolve(canvas.toDataURL('image/jpeg', 0.8));
-                };
-                img.onerror = () => {
-                    URL.revokeObjectURL(objectURL);
-                    reject(new Error('Не удалось прочитать файл как изображение'));
-                };
-                img.src = objectURL;
+                pdf.addImage(img, 'JPEG', x, y, imgW, imgH, undefined, 'FAST');
+                resolve();
+              };
+              img.onerror = function() {
+                reject(new Error(`Ошибка загрузки изображения #${i + 1} для PDF.`));
+              };
+              img.src = dataUrl;
             });
-        }
+          }
 
-        function loadImage(src) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = () => reject(new Error('Ошибка декодирования картинки'));
-                img.src = src;
-            });
+          // Генерируем Data URI строку (Base64)
+          generatedPdfDataUri = pdf.output('datauristring');
+          setStatus(`PDF готов! Страниц: ${pdf.internal.getNumberOfPages()}.`, 'success');
+
+          // Показываем кнопки просмотра и скачивания
+          viewBtn.classList.remove('hidden');
+          downloadBtn.classList.remove('hidden');
+        } catch (err) {
+          setStatus(`Ошибка генерации PDF: ${err.message}`, 'error');
+          generatedPdfDataUri = null;
+          viewBtn.classList.add('hidden');
+          downloadBtn.classList.add('hidden');
+        } finally {
+          generateBtn.disabled = false;
         }
-    </script>
+      }
+
+      // --- Просмотр PDF (открытие Data URI) ---
+      function openPDFViewer() {
+        if (!generatedPdfDataUri) {
+          setStatus('Сначала создайте PDF.', 'error');
+          return;
+        }
+        try {
+          // Открываем Data URI в новом окне / встроенном просмотрщике
+          const newWindow = window.open(generatedPdfDataUri, '_blank');
+          if (!newWindow || newWindow.closed) {
+            // Фолбэк: если блокировщик всплывающих окон мешает
+            window.location.href = generatedPdfDataUri;
+          }
+          setStatus('Документ открыт в просмотрщике.', 'success');
+        } catch (e) {
+          setStatus('Не удалось открыть PDF. Попробуйте скачать.', 'error');
+        }
+      }
+
+      // --- Скачивание PDF (Data URI ссылка) ---
+      function downloadPDF() {
+        if (!generatedPdfDataUri) {
+          setStatus('Сначала создайте PDF.', 'error');
+          return;
+        }
+        try {
+          const link = document.createElement('a');
+          link.href = generatedPdfDataUri;
+          link.download = 'document.pdf';
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setStatus('Скачивание началось...', 'success');
+        } catch (e) {
+          setStatus('Ошибка скачивания. Попробуйте открыть и сохранить вручную.', 'error');
+        }
+      }
+
+      // --- Обработчики событий ---
+      uploadZone.addEventListener('click', () => {
+        fileInput.click();
+      });
+
+      // Drag & drop поддержка для ПК
+      uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = '#60a5fa';
+        uploadZone.style.background = 'rgba(96, 165, 250, 0.1)';
+      });
+      uploadZone.addEventListener('dragleave', () => {
+        uploadZone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+        uploadZone.style.background = 'rgba(255, 255, 255, 0.03)';
+      });
+      uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+        uploadZone.style.background = 'rgba(255, 255, 255, 0.03)';
+        const dt = e.dataTransfer;
+        if (dt && dt.files) {
+          addFiles(dt.files);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          addFiles(e.target.files);
+        }
+      });
+
+      generateBtn.addEventListener('click', generatePDF);
+      viewBtn.addEventListener('click', openPDFViewer);
+      downloadBtn.addEventListener('click', downloadPDF);
+
+      // Начальное состояние
+      updateUI();
+      setStatus('Готов к работе. Выберите изображения.', '');
+    })();
+  </script>
 </body>
 </html>
