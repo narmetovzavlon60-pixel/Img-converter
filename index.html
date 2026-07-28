@@ -113,21 +113,21 @@
 
         <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
 
-        <!-- Блок результата на базе надежных нативных ссылок -->
+        <!-- Блок результата на базе Data URI -->
         <div id="resultContainer">
             <div style="font-weight: bold; text-align: center; color: #10b981;">PDF успешно создан!</div>
             
-            <!-- Кнопка скачивания -->
+            <!-- Прямая ссылка с Data URI для скачивания -->
             <a id="downloadLink" class="btn" download="document.pdf">💾 Скачать PDF файл</a>
             
-            <!-- Кнопка просмотра (открывает документ в системном просмотрщике/новой вкладке) -->
-            <a id="openLink" class="btn btn-secondary" target="_blank">🔍 Просмотреть / Открыть PDF</a>
+            <!-- Кнопка принудительного открытия в новом окне -->
+            <button class="btn btn-secondary" id="openBtn">🔍 Просмотреть / Открыть PDF</button>
         </div>
     </div>
 
     <script>
         let selectedFiles = [];
-        let currentBlobUrl = null;
+        let generatedDataUri = null;
 
         const imageInput = document.getElementById('imageInput');
         const previewsContainer = document.getElementById('previewsContainer');
@@ -135,7 +135,7 @@
         const statusText = document.getElementById('statusText');
         const resultContainer = document.getElementById('resultContainer');
         const downloadLink = document.getElementById('downloadLink');
-        const openLink = document.getElementById('openLink');
+        const openBtn = document.getElementById('openBtn');
 
         imageInput.addEventListener('change', (e) => {
             const files = e.target.files;
@@ -144,12 +144,6 @@
             selectedFiles = Array.from(files);
             previewsContainer.innerHTML = '';
             resultContainer.style.display = 'none';
-
-            // Очищаем старый Blob URL для экономии памяти
-            if (currentBlobUrl) {
-                URL.revokeObjectURL(currentBlobUrl);
-                currentBlobUrl = null;
-            }
 
             selectedFiles.forEach((file) => {
                 const objectURL = URL.createObjectURL(file);
@@ -233,15 +227,11 @@
 
                 statusText.textContent = '🔄 Финализация документа...';
                 
-                // Создаем легкий и быстрый Blob вместо тяжелого datauristring
-                const pdfBlob = pdf.output('blob');
-                currentBlobUrl = URL.createObjectURL(pdfBlob);
+                // Рендерим в Base64 (Data URI)
+                generatedDataUri = pdf.output('datauristring');
                 
-                // Настраиваем ссылки для скачивания и просмотра
-                downloadLink.href = currentBlobUrl;
+                downloadLink.href = generatedDataUri;
                 downloadLink.download = `document_${Date.now()}.pdf`;
-                
-                openLink.href = currentBlobUrl;
 
                 resultContainer.style.display = 'flex';
                 statusText.textContent = '✅ Готово! Нажмите кнопку ниже.';
@@ -251,6 +241,17 @@
                 console.error(error);
                 statusText.textContent = `❌ Сбой: ${error.message}`;
                 convertBtn.disabled = false;
+            }
+        });
+
+        openBtn.addEventListener('click', () => {
+            if (!generatedDataUri) return;
+            // Принудительно открываем Data URI в новом окне/вкладке
+            const newWindow = window.open();
+            if (newWindow) {
+                newWindow.document.write(`<iframe src="${generatedDataUri}" style="width:100%; height:100%; border:none; margin:0; padding:0;"></iframe>`);
+            } else {
+                window.location.href = generatedDataUri;
             }
         });
 
