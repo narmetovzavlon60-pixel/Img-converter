@@ -1066,6 +1066,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   <div class="header">
     <h1 id="ui-title">📄 Image to PDF</h1>
     <p id="ui-subtitle">Склейка фото в PDF документ</p>
+    <p style="font-size:10px; color:#475569; margin-top:4px;">build v5-2026-07-28-0012</p>
   </div>
 
   <!-- Dropzone -->
@@ -1210,6 +1211,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     console.log(line);
   }
 
+  const BUILD_ID = 'v5-' + '2026-07-28-0012' + ' (data-uri download fix)';
+  dlog('🏗️ BUILD_ID: ' + BUILD_ID);
   dlog('=== Страница загружена ===');
   dlog('User-Agent: ' + navigator.userAgent);
   dlog('Telegram WebApp SDK доступен: ' + !!tg);
@@ -1616,10 +1619,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   
   // Хранилище готового PDF между "Сформировать" и "Скачать"
   let generatedPdfBlob = null;
+  let generatedPdfDataUri = null; // вычисляется синхронно при генерации, чтобы
+                                    // не терять "доверие" Telegram к прямому клику
   let generatedFileName = '';
 
   function resetGenerateButton() {
     generatedPdfBlob = null;
+    generatedPdfDataUri = null;
     generatedFileName = '';
     generateBtn.dataset.mode = 'generate';
     generateBtn.classList.remove('mode-download');
@@ -1780,8 +1786,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    *   4) Открытие data URI в новой вкладке — последний рубеж.
    */
   async function handleDownloadClick() {
-    if (!generatedPdfBlob) {
-      dlog('handleDownloadClick: generatedPdfBlob отсутствует!');
+    if (!generatedPdfBlob || !generatedPdfDataUri) {
+      dlog('handleDownloadClick: PDF-данные отсутствуют!');
       showToast(t('msg_needImages'), 'error');
       return;
     }
@@ -1789,7 +1795,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     haptic('medium');
     const fileName = generatedFileName || `Scans_Document_${Date.now()}.pdf`;
 
-    // 1) Нативный Share Sheet (наиболее стабильный способ в Telegram WebView)
+    // 1) Нативный Share Sheet — лучший вариант, если поддерживается устройством
     try {
       dlog('Способ 1: navigator.share. share=' + !!navigator.share + ', canShare=' + !!navigator.canShare);
       if (navigator.share && navigator.canShare) {
@@ -1806,15 +1812,38 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       }
     } catch (shareErr) {
       dlog('Способ 1 не сработал: ' + (shareErr && shareErr.name) + ' — ' + (shareErr && shareErr.message));
-      // Пользователь отменил системный диалог шаринга — это не ошибка
       if (shareErr && shareErr.name === 'AbortError') return;
       console.warn('navigator.share недоступен или упал, пробуем fallback:', shareErr);
     }
 
-    // 2) Прямой клик по <a download="..."> — безопасно, т.к. вызывается
-    //    синхронно внутри реального клика пользователя
+    // 2) tg.openLink() с готовым data URI (вычислен ЗАРАНЕЕ, синхронно, при
+    //    генерации PDF — поэтому здесь нет await ДО вызова openLink, и
+    //    Telegram всё ещё считает это прямым откликом на клик пользователя).
+    //    Открывает PDF в ПОЛНОЦЕННОМ внешнем браузере (Chrome и т.п.), а не
+    //    во встроенном WebView — именно внешний браузер умеет корректно
+    //    сохранять/скачивать файл. blob: ссылки для этого НЕ подходят,
+    //    т.к. они привязаны к породившей их вкладке и невалидны снаружи.
     try {
-      dlog('Способ 2: <a download> через blob URL');
+      dlog('Способ 2: tg.openLink(dataURI). tg=' + !!tg + ', openLink=' + !!(tg && tg.openLink));
+      if (tg && tg.openLink) {
+        if (generatedPdfDataUri.length > 1500000) {
+          dlog('⚠️ data URI большой (' + generatedPdfDataUri.length + ' симв.) — на некоторых устройствах Android может не открыться из-за ограничений системы на размер Intent');
+        }
+        tg.openLink(generatedPdfDataUri, { try_instant_view: false });
+        dlog('✅ Способ 2: tg.openLink(dataURI) вызван без исключений');
+        showToast(t('msg_downloadFallback'), 'success');
+        return;
+      }
+    } catch (openErr) {
+      dlog('Способ 2 не сработал: ' + openErr);
+      console.warn('tg.openLink(dataURI) failed:', openErr);
+    }
+
+    // 3) Прямой клик по <a download="..."> через blob URL — иногда всё же
+    //    срабатывает (например, если Telegram обновит WebView), поэтому
+    //    оставляем как дополнительную попытку.
+    try {
+      dlog('Способ 3: <a download> через blob URL');
       const blobUrl = URL.createObjectURL(generatedPdfBlob);
       const a = document.createElement('a');
       a.href = blobUrl;
@@ -1824,49 +1853,25 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-      dlog('✅ Способ 2: клик по <a> выполнен без исключений');
-      haptic('success');
-      showToast(t('msg_pdfSuccess'), 'success');
-      return;
+      dlog('Способ 3: клик по <a> выполнен без исключений (не гарантирует реальное скачивание в этом WebView)');
     } catch (linkErr) {
-      dlog('Способ 2 не сработал: ' + linkErr);
+      dlog('Способ 3 не сработал: ' + linkErr);
       console.warn('Прямое скачивание через <a> не удалось:', linkErr);
     }
 
-    // 3) tg.openLink — открывает blob через системный браузер Telegram
+    // 4) Последний рубеж — открыть data URI в новой вкладке напрямую через window.open
+    dlog('Способ 4: window.open(dataURI) напрямую (без tg.openLink)');
     try {
-      dlog('Способ 3: tg.openLink. tg=' + !!tg + ', tg.openLink=' + !!(tg && tg.openLink));
-      if (tg && tg.openLink) {
-        const blobUrl = URL.createObjectURL(generatedPdfBlob);
-        tg.openLink(blobUrl, { try_instant_view: false });
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-        dlog('✅ Способ 3: tg.openLink вызван без исключений');
-        showToast(t('msg_downloadFallback'), 'success');
-        return;
-      }
-    } catch (tgErr) {
-      dlog('Способ 3 не сработал: ' + tgErr);
-      console.warn('tg.openLink не сработал:', tgErr);
-    }
-
-    // 4) Последний рубеж — data URI в новом окне/вкладке
-    dlog('Способ 4: попытка через FileReader + window.open(data URI)');
-    try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const opened = window.open(reader.result, '_blank');
-        if (!opened) {
-          showToast(t('msg_pdfError'), 'error');
-        } else {
-          showToast(t('msg_downloadFallback'), 'success');
-        }
-      };
-      reader.onerror = () => {
-        haptic('error');
+      const opened = window.open(generatedPdfDataUri, '_blank');
+      if (!opened) {
+        dlog('window.open вернул null/undefined — всплывающее окно заблокировано');
         showToast(t('msg_pdfError'), 'error');
-      };
-      reader.readAsDataURL(generatedPdfBlob);
+      } else {
+        dlog('✅ Способ 4: window.open выполнен');
+        showToast(t('msg_downloadFallback'), 'success');
+      }
     } catch (finalErr) {
+      dlog('Способ 4 не сработал: ' + finalErr);
       console.error('Все способы скачивания не удались:', finalErr);
       haptic('error');
       showToast(t('msg_pdfError') + ': ' + finalErr.message, 'error');
@@ -1970,8 +1975,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       // автоматически — WebView Telegram блокирует программные клики/
       // скрытые ссылки без прямого физического взаимодействия пользователя.
       generatedPdfBlob = pdf.output('blob');
+      generatedPdfDataUri = pdf.output('datauristring'); // синхронно — тот же PDF, другой формат
       generatedFileName = fileName;
-      dlog(`✅ PDF собран успешно. Размер blob: ${generatedPdfBlob.size} байт`);
+      dlog(`✅ PDF собран успешно. Размер blob: ${generatedPdfBlob.size} байт, размер data URI: ${generatedPdfDataUri.length} символов`);
 
       hideProgress();
       haptic('success');
