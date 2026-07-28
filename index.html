@@ -12,6 +12,7 @@
             color: #ffffff;
             padding: 16px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
         }
         .container {
             display: flex;
@@ -68,11 +69,18 @@
             width: 100%;
             cursor: pointer;
             text-align: center;
+            text-decoration: none;
+            display: block;
+            box-sizing: border-box;
         }
         .btn:disabled {
             background-color: #374151;
             opacity: 0.5;
             cursor: not-allowed;
+        }
+        .btn-secondary {
+            background-color: #2563eb;
+            margin-top: 8px;
         }
         #statusText {
             text-align: center;
@@ -80,13 +88,14 @@
             color: #9ca3af;
             min-height: 20px;
         }
-        #pdfViewer {
-            width: 100%;
-            height: 350px;
-            border: 1px solid #374151;
-            border-radius: 10px;
+        #resultContainer {
             display: none;
-            background: #fff;
+            flex-direction: column;
+            gap: 8px;
+            background: #1e1e1e;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #374151;
         }
     </style>
 </head>
@@ -105,17 +114,25 @@
 
         <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
 
-        <iframe id="pdfViewer"></iframe>
+        <!-- Блок результата вместо проблемного iframe -->
+        <div id="resultContainer">
+            <div style="font-weight: bold; text-align: center; color: #10b981;">PDF успешно создан!</div>
+            <a id="downloadLink" class="btn" download="converted.pdf">💾 Скачать PDF файл</a>
+            <button class="btn btn-secondary" id="openBtn">🔍 Открыть / Просмотреть PDF</button>
+        </div>
     </div>
 
     <script>
         let selectedFiles = [];
+        let generatedDataUri = null;
 
         const imageInput = document.getElementById('imageInput');
         const previewsContainer = document.getElementById('previewsContainer');
         const convertBtn = document.getElementById('convertBtn');
         const statusText = document.getElementById('statusText');
-        const pdfViewer = document.getElementById('pdfViewer');
+        const resultContainer = document.getElementById('resultContainer');
+        const downloadLink = document.getElementById('downloadLink');
+        const openBtn = document.getElementById('openBtn');
 
         imageInput.addEventListener('change', (e) => {
             const files = e.target.files;
@@ -123,7 +140,7 @@
 
             selectedFiles = Array.from(files);
             previewsContainer.innerHTML = '';
-            pdfViewer.style.display = 'none';
+            resultContainer.style.display = 'none';
 
             selectedFiles.forEach((file) => {
                 const objectURL = URL.createObjectURL(file);
@@ -152,6 +169,7 @@
 
             convertBtn.disabled = true;
             statusText.textContent = '🔄 Инициализация генератора...';
+            resultContainer.style.display = 'none';
 
             try {
                 const { jsPDF } = window.jspdf;
@@ -179,7 +197,7 @@
                     try {
                         img = await loadImage(dataUrl);
                     } catch (err) {
-                        throw new Error(`Ошибка загрузки изображения ${i+1} в память: ${err.message}`);
+                        throw new Error(`Ошибка загрузки изображения ${i+1}: ${err.message}`);
                     }
 
                     if (i > 0) {
@@ -200,24 +218,37 @@
                     try {
                         pdf.addImage(dataUrl, 'JPEG', x, y, imgWidth, imgHeight);
                     } catch (err) {
-                        throw new Error(`Ошибка добавления в PDF на странице ${i+1}: ${err.message}`);
+                        throw new Error(`Ошибка добавления в PDF: ${err.message}`);
                     }
                 }
 
-                statusText.textContent = '🔄 Рендеринг финального PDF...';
+                statusText.textContent = '🔄 Финализация документа...';
                 
-                const pdfBlob = pdf.output('blob');
-                const blobUrl = URL.createObjectURL(pdfBlob);
+                // Генерируем Data URI строку, которая универсально поддерживается ссылками и окнами
+                generatedDataUri = pdf.output('datauristring');
                 
-                pdfViewer.src = blobUrl;
-                pdfViewer.style.display = 'block';
-                statusText.textContent = '✅ Готово! PDF отображен ниже.';
+                downloadLink.href = generatedDataUri;
+                resultContainer.style.display = 'flex';
+                
+                statusText.textContent = '✅ Готово! Используйте кнопки ниже.';
                 convertBtn.disabled = false;
 
             } catch (error) {
                 console.error(error);
                 statusText.textContent = `❌ Сбой: ${error.message}`;
                 convertBtn.disabled = false;
+            }
+        });
+
+        openBtn.addEventListener('click', () => {
+            if (generatedDataUri) {
+                // Открываем документ в новой вкладке/окне — система телефона предложит его посмотреть или скачать
+                const newWindow = window.open();
+                if (newWindow) {
+                    newWindow.document.write(`<iframe src="${generatedDataUri}" style="width:100%; height:100%; border:none; margin:0; padding:0;"></iframe>`);
+                } else {
+                    window.location.href = generatedDataUri;
+                }
             }
         });
 
