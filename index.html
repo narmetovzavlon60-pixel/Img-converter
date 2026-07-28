@@ -80,7 +80,6 @@
         }
         .btn-secondary {
             background-color: #2563eb;
-            margin-top: 8px;
         }
         #statusText {
             text-align: center;
@@ -91,7 +90,7 @@
         #resultContainer {
             display: none;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
             background: #1e1e1e;
             padding: 16px;
             border-radius: 12px;
@@ -114,17 +113,21 @@
 
         <button class="btn" id="convertBtn" disabled>Сконвертировать в PDF</button>
 
-        <!-- Блок результата вместо проблемного iframe -->
+        <!-- Блок результата на базе надежных нативных ссылок -->
         <div id="resultContainer">
             <div style="font-weight: bold; text-align: center; color: #10b981;">PDF успешно создан!</div>
-            <a id="downloadLink" class="btn" download="converted.pdf">💾 Скачать PDF файл</a>
-            <button class="btn btn-secondary" id="openBtn">🔍 Открыть / Просмотреть PDF</button>
+            
+            <!-- Кнопка скачивания -->
+            <a id="downloadLink" class="btn" download="document.pdf">💾 Скачать PDF файл</a>
+            
+            <!-- Кнопка просмотра (открывает документ в системном просмотрщике/новой вкладке) -->
+            <a id="openLink" class="btn btn-secondary" target="_blank">🔍 Просмотреть / Открыть PDF</a>
         </div>
     </div>
 
     <script>
         let selectedFiles = [];
-        let generatedDataUri = null;
+        let currentBlobUrl = null;
 
         const imageInput = document.getElementById('imageInput');
         const previewsContainer = document.getElementById('previewsContainer');
@@ -132,7 +135,7 @@
         const statusText = document.getElementById('statusText');
         const resultContainer = document.getElementById('resultContainer');
         const downloadLink = document.getElementById('downloadLink');
-        const openBtn = document.getElementById('openBtn');
+        const openLink = document.getElementById('openLink');
 
         imageInput.addEventListener('change', (e) => {
             const files = e.target.files;
@@ -141,6 +144,12 @@
             selectedFiles = Array.from(files);
             previewsContainer.innerHTML = '';
             resultContainer.style.display = 'none';
+
+            // Очищаем старый Blob URL для экономии памяти
+            if (currentBlobUrl) {
+                URL.revokeObjectURL(currentBlobUrl);
+                currentBlobUrl = null;
+            }
 
             selectedFiles.forEach((file) => {
                 const objectURL = URL.createObjectURL(file);
@@ -224,31 +233,24 @@
 
                 statusText.textContent = '🔄 Финализация документа...';
                 
-                // Генерируем Data URI строку, которая универсально поддерживается ссылками и окнами
-                generatedDataUri = pdf.output('datauristring');
+                // Создаем легкий и быстрый Blob вместо тяжелого datauristring
+                const pdfBlob = pdf.output('blob');
+                currentBlobUrl = URL.createObjectURL(pdfBlob);
                 
-                downloadLink.href = generatedDataUri;
+                // Настраиваем ссылки для скачивания и просмотра
+                downloadLink.href = currentBlobUrl;
+                downloadLink.download = `document_${Date.now()}.pdf`;
+                
+                openLink.href = currentBlobUrl;
+
                 resultContainer.style.display = 'flex';
-                
-                statusText.textContent = '✅ Готово! Используйте кнопки ниже.';
+                statusText.textContent = '✅ Готово! Нажмите кнопку ниже.';
                 convertBtn.disabled = false;
 
             } catch (error) {
                 console.error(error);
                 statusText.textContent = `❌ Сбой: ${error.message}`;
                 convertBtn.disabled = false;
-            }
-        });
-
-        openBtn.addEventListener('click', () => {
-            if (generatedDataUri) {
-                // Открываем документ в новой вкладке/окне — система телефона предложит его посмотреть или скачать
-                const newWindow = window.open();
-                if (newWindow) {
-                    newWindow.document.write(`<iframe src="${generatedDataUri}" style="width:100%; height:100%; border:none; margin:0; padding:0;"></iframe>`);
-                } else {
-                    window.location.href = generatedDataUri;
-                }
             }
         });
 
